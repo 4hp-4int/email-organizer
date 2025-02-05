@@ -1,7 +1,16 @@
 from typing import List, Dict
 
 from bs4 import BeautifulSoup
+import asyncio
+from functools import wraps
 
+
+def coro(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        return asyncio.run(f(*args, **kwargs))
+
+    return wrapper
 
 def chunk_text(text: str, max_length: int) -> List[str]:
     return [text[i : i + max_length] for i in range(0, len(text), max_length)]
@@ -26,10 +35,4 @@ def simplify_html(html_content: str):
 
     soup = BeautifulSoup(html_content, "html.parser")
 
-    # Remove script and style elements
-    for tag in soup(["script", "style", "img"]):
-        tag.decompose()
-
-    # Optionally, you might also remove comments and extra whitespace
-    clean_html = soup.prettify()
-    return clean_html
+    return soup.get_text(separator=" ", strip=True)

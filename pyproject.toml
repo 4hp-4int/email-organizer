@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Agent AI to help with Web Scraping tasks"
 authors = ["Khalen Fredieu"]
 readme = "README.md"
+packages = [ {include = "src"}]
 
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -19,6 +20,8 @@ pymongo = "^4.11"
 transformers = {extras = ["torch"], version = "^4.48.2"}
 torch = "^2.6.0"
 scikit-learn = "^1.6.1"
+sentence-transformers = "^3.4.1"
+pandas = "^2.2.3"
 
 
 [tool.poetry.group.dev.dependencies]

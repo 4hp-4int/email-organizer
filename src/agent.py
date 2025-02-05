@@ -1,5 +1,5 @@
 from cryptography.fernet import Fernet
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from logging import getLogger
 import json
@@ -31,6 +31,7 @@ class EmailMessage:
     message_id: str
     conversation_id: str
     received_date: date
+    embeddings: list = field(default_factory=list)
 
 
 class CSSSelectorAgent(Agent):

@@ -1,29 +1,31 @@
 from dataclasses import asdict
-import json
 import logging
 from typing import List, Dict
 
+from bertopic import BERTopic
 from bson import MinKey
+import numpy as np
+import pandas as pd
 from pymongo import MongoClient
+from pymongo.operations import UpdateOne
 import typer
+from sentence_transformers import SentenceTransformer
 from transformers import (
     DistilBertForSequenceClassification,
     DistilBertTokenizer,
     Trainer,
     TrainingArguments,
 )
-import requests
 from sklearn.model_selection import train_test_split
 
-from src.agent import CSSSelectorAgent, EmailOrganizerAgent, EmailMessage
+from src.agent import CSSSelectorAgent, EmailOrganizerAgent
 from src.manager import AgentManager
-from src.message import Message
-from src.util import simplify_html, chunk_text, process_chunk
+from src.util import simplify_html, coro
 from xconfig import Config
 
 
 logger = logging.getLogger("Email-Organizer")
-logger.setLevel(logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 
 app = typer.Typer(help="Agentic Web Scraper Cli")
@@ -58,45 +60,6 @@ def aggregate_chunk_results(results: List[Dict]) -> Dict:
     return aggregated
 
 
-@app.command()
-def generate_selectors(
-    url: str, prompt: str = "Extract information for time-series data"
-):
-
-    typer.echo(f"Fetching URL: {url}")
-
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-    except Exception as e:
-        typer.echo(f"Error loading webpage: {url} - {e}", err=True)
-        raise typer.Exit(code=1)
-
-    html_content = simplify_html(response.text)
-    chunks = chunk_text(html_content, 2000)
-    chunk_results = [process_chunk(chunk) for chunk in chunks]
-
-    aggregated_dom = aggregate_chunk_results(chunk_results)
-    typer.echo("Aggregated DOM representation:")
-    typer.echo(json.dumps(aggregated_dom, indent=2))
-
-    message = Message(
-        sender="CLI",
-        recipient=css_selector_agent.name,
-        payload={"html": html_content, "prompt": prompt},
-    )
-
-    # # Send the message and get the response from the agent
-    # response_message = manager.send_message(css_selector_agent.name, message)
-
-    # if response_message:
-    #     selectors = response_message.payload.get("selectors", {})
-    #     typer.echo("\nExtracted CSS selectors:")
-    #     typer.echo(json.dumps(selectors, indent=2))
-    # else:
-    #     typer.echo("No response received from the agent.")
-
-
 import asyncio
 from functools import wraps
 
@@ -120,6 +83,102 @@ async def collect_and_store_email():
             logger.exception("Failed to write email to the database")
 
 
+@app.command("generate_email_embeddings")
+def generate_email_embeddings():
+    # Assumes embeddings were not generated during collection.
+
+    def preprocess_function(email):
+        subject = email_agent._decrypt_message(email["subject"])
+        body = simplify_html(email_agent._decrypt_message(email["body"]))
+        combined_text = f"Subject: {subject}\n\nBody: {body}"
+        return combined_text
+
+    # Grab all the emails
+    model = SentenceTransformer("all-MiniLm-L6-V2")
+    email_cursor = email_collection.find({"_id": {"$gte": MinKey()}})
+
+    update_operations = list()
+    for doc in email_cursor:
+        # Generate the embeddings
+        email_content = preprocess_function(doc)
+        embedding = model.encode(email_content, show_progress_bar=False)
+
+        # Prepare the bulk update statements
+        update = UpdateOne(
+            {"_id": doc["_id"]}, update={"$set": {"embeddings": embedding.tolist()}}
+        )
+        update_operations.append(update)
+
+        if len(update_operations) == 1000:
+            logging.info(f"Updating {len(update_operations)} documents with embeddings")
+            result = email_collection.bulk_write(update_operations)
+
+            logging.info(
+                f"{result.modified_count} documents updated, moving to next batch"
+            )
+            update_operations = list()
+
+    logging.info("Done generating vector embeddings.")
+
+
+@app.command("classify_emails")
+def classify_emails():
+
+    logging.info("Classifying emails using data in emails collections")
+
+    def preprocess_function(email):
+        subject = email_agent._decrypt_message(email["subject"])
+        body = simplify_html(email_agent._decrypt_message(email["body"]))
+        combined_text = f"Subject: {subject}\n\nBody: {body}"
+        return combined_text.lower()
+
+    # Grab all the emails
+    model = SentenceTransformer("all-MiniLm-L6-V2")
+    topic_model = BERTopic(verbose=True, min_topic_size=5)
+
+    # Exclude Amazon Emails ZOMG
+    email_cursor = email_collection.find({"_id": {"$gte": MinKey()}})
+
+    raw_doc_strings = list()
+    embeddings = list()
+
+    logging.info("Preparing training data from the database.")
+    for idx, email in enumerate(email_cursor, start=1):
+
+        if idx % 1000 == 0:
+            logging.info(f"Processed {idx} emails for training")
+
+        doc_string = preprocess_function(email)
+        embedding = email.get("embeddings")
+        if not embedding:
+            logging.debug(f"{email['_id']} does not have embeddings")
+            continue
+
+        if "amazon" in doc_string:
+            logging.info("Amazon is ruining my life.")
+            continue
+
+        raw_doc_strings.append(doc_string)
+        embeddings.append(embedding)
+
+    np_embeddings = np.array(embeddings)
+
+    logging.info("Training Bert on the Topcis")
+    topics, probs = topic_model.fit_transform(
+        documents=raw_doc_strings, embeddings=np_embeddings
+    )
+
+    logging.info("Writing topics to HTML File")
+    fig = topic_model.visualize_topics()
+    fig.write_html("topics.html")
+
+    # Save to JSON
+    topic_model.get_topic_info().to_json(
+        "topics_info.json", orient="records", lines=True
+    )
+    print(topic_model.get_topic_info())
+
+
 @app.command("train_on_emails")
 def train_on_emails():
 
@@ -131,7 +190,7 @@ def train_on_emails():
         return tokenizer(subject + " " + body, truncation=True, padding=True)
 
     # Grab all the emails
-    emails = email_collection.find().limit(100).to_list()
+    emails = email_collection.find({"_id": {"$gte": MinKey()}}).limit(100).to_list()
 
     # Initialize the Tokenizer
     tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased")
