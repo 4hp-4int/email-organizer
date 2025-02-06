@@ -9,7 +9,13 @@ from agent_protocol import Agent
 from azure.identity import ClientSecretCredential
 from msgraph import GraphServiceClient
 from msgraph.generated.models.o_data_errors.o_data_error import ODataError
+from msgraph.generated.models.message import Message
 from msgraph.generated.users.users_request_builder import UsersRequestBuilder
+from msgraph.generated.users.item.messages.item.move.move_post_request_body import (
+    MovePostRequestBody,
+)
+
+
 from msgraph.generated.users.item.messages.messages_request_builder import (
     MessagesRequestBuilder,
 )
@@ -60,7 +66,8 @@ class EmailOrganizerAgent(Agent):
             tenant_id, client_id, client_secret
         )
         self.user_client = GraphServiceClient(
-            credentials=client_secret_credential, scopes=graph_scopes
+            credentials=client_secret_credential,
+            scopes=graph_scopes,
         )
         self.name = name
 
@@ -192,7 +199,7 @@ class EmailOrganizerAgent(Agent):
             filter=f"isRead eq false and receivedDateTime ge {today}",
             top=100,
             orderby="receivedDateTime desc",
-            select="from,isRead,receivedDateTime,subject,body",
+            select="from,isRead,receivedDateTime,subject,body,id,parentFolderId",
         )
         request_configuration = RequestConfiguration(query_parameters=query_params)
 
@@ -203,7 +210,7 @@ class EmailOrganizerAgent(Agent):
                     user_id
                 ).messages.get(request_configuration=request_configuration)
 
-                todays_emails.append(messages.value)
+                todays_emails.extend(messages.value)
 
                 # Check if there are more pages
                 if messages.odata_next_link:
@@ -216,9 +223,6 @@ class EmailOrganizerAgent(Agent):
                     logger.info("No more emails found")
                     break
 
-                # Return the emails
-
-                todays_emails += messages.value
             except ODataError as e:
                 logger.error(f"Error fetching emails: {e}")
                 raise e
@@ -241,13 +245,81 @@ class EmailOrganizerAgent(Agent):
         ]
         for folder in mail_folder_models:
 
+            # Create the folder or skip if it already exists
             try:
                 await self.user_client.users.by_user_id(user_id).mail_folders.post(
                     folder
                 )
-            except Exception as e:
-                logger.exception(f"Failed to create folder {folder.display_name}")
+            except ODataError as e:
+                logger.exception(
+                    f"Failed to create folder {folder.display_name} - error: {e}"
+                )
                 continue
+
+    async def get_folder_destination_ids(self, user_id: str):
+        """
+        Retrieve the destination folder IDs for the user's inbox.
+        """
+        mail_folders = list()
+        folders = await self.user_client.users.by_user_id(user_id).mail_folders.get()
+
+        while True:
+            # Check if there are more pages
+            if folders.odata_next_link:
+                logger.info("Fetching more folders.")
+                folders = (
+                    await self.user_client.users.by_user_id(user_id)
+                    .mail_folders.with_url(folders.odata_next_link)
+                    .get()
+                )
+                mail_folders.extend(folders.value)
+            else:
+                break
+
+        return {
+            folder.display_name: folder.id
+            for folder in mail_folders
+            if folder.display_name in config.TOPIC_LABELS.values()
+        }
+
+    async def categorize_emails(
+        self,
+        user_id: str,
+        messages_labels: tuple[Message, str],
+        folder_destination_ids: dict[str, str],
+    ):
+        """
+        Categorize emails based on the provided labels.
+        """
+
+        for message, label in messages_labels:
+            # Skip if the label is "unknown"
+            if label == "error":
+                continue
+
+            # Skip if the email is already in the correct folder
+            if message.parent_folder_id == folder_destination_ids.get(label):
+                continue
+
+            # Skip if the label is not in the config
+            if not folder_destination_ids.get(label):
+                continue
+
+            logger.info(f"Categorizing email {message.id} as {label}")
+            move_request_body = MovePostRequestBody()
+            move_request_body.destination_id = folder_destination_ids.get(label)
+            # Categorize the email via the Graph API
+            try:
+                await self.user_client.users.by_user_id(user_id).messages.by_message_id(
+                    message_id=message.id
+                ).move.post(move_request_body)
+            except ODataError as e:
+                logger.exception(
+                    f"Failed to categorize email {message.subject} - error: {e}"
+                )
+                break
+
+        return True
 
     def on_message(self, message: Message) -> Message:
         """

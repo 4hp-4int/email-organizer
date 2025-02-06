@@ -49,7 +49,7 @@ def train_classifier_model():
     logging.info("Classifying emails using data in emails collections")
 
     # Grab all the emails
-    topic_model = BERTopic(verbose=True, min_topic_size=10, nr_topics=50)
+    topic_model = BERTopic(verbose=True, min_topic_size=10, nr_topics=13)
 
     email_cursor = email_collection.find({"_id": {"$gte": MinKey()}})
 
@@ -89,30 +89,79 @@ def train_classifier_model():
     )
     print(topic_model.get_topics())
 
-    topic_model.save(f"emailClassifier-50")
+    topic_model.save(f"emailClassifier-13")
 
     code.interact()
 
 
 @app.command("create_inbox_folders")
 @coro
-async def create_inbox_folders():
+async def create_inbox_folders(
+    user_id: str = typer.Option(
+        "khalen@4hp-4int.com", help="User ID to categorize emails for."
+    ),
+):
     """
     Create folders in the user's inbox based on the topics.
     """
     result = await email_agent.prepare_inbox_folders(
-        "khalen@4hp-4int.com", set(config.TOPIC_LABELS.values())
+        user_id, set(config.TOPIC_LABELS.values())
     )
+
+    if result:
+        logger.info("Successfully created inbox folders")
+
+    # Store the inbox destination ids.
 
 
 @app.command("review_and_categorize")
 @coro
-async def review_categorize_todays_email():
+async def review_categorize_todays_email(
+    user_id: str = typer.Option(
+        "khalen@4hp-4int.com", help="User ID to categorize emails for."
+    ),
+    model_path: str = typer.Option(
+        "emailClassifier-35", help="Path to the topic model."
+    ),
+    dry_run: bool = typer.Option(
+        True,
+        help="Perform a dry run without categorizing emails.",
+    ),
+):
     """
     Review and categorize today's email.
     """
-    emails = await email_agent.get_todays_unread_emails("khalen@4hp-4int.com")
-    logger.info(f"Found {len(emails)} emails to categorize")
+    topic_model = BERTopic.load(model_path, embedding_model=email_agent.model)
+
+    todays_emails = list()
+    folder_destination_ids = await email_agent.get_folder_destination_ids(user_id)
+    raw_emails = await email_agent.get_todays_unread_emails(user_id)
+    logger.info(f"Found {len(raw_emails)} emails to categorize")
+
+    for email in raw_emails:
+        email_content = email_agent.preprocess_function(email)
+        todays_emails.append(email_content)
+
+    new_topics, _ = topic_model.transform(todays_emails)
+    new_labels = [config.TOPIC_LABELS.get(topic, "Unknown") for topic in new_topics]
+
+    emails_labels = list(zip(raw_emails, new_labels))
+
+    if not dry_run:
+        result = await email_agent.categorize_emails(
+            user_id, emails_labels, folder_destination_ids
+        )
+
+        if result:
+            logger.info("Successfully categorized today's emails")
+        else:
+            logger.error("Failed to categorize today's emails")
+    else:
+        for email_label, topic in zip(emails_labels, new_topics):
+            email, label = email_label
+            logger.info(
+                f"Subject: {email.subject} - Label: {label} - topic_id: {topic}"
+            )
 
 
 if __name__ == "__main__":
