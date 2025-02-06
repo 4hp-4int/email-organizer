@@ -1,12 +1,11 @@
+import code
 from dataclasses import asdict
 import logging
 
 from bertopic import BERTopic
 from bson import MinKey
 import numpy as np
-import spacy
 from pymongo import MongoClient
-from pymongo.operations import UpdateOne
 import typer
 from sentence_transformers import SentenceTransformer
 from transformers import (
@@ -19,7 +18,7 @@ from sklearn.model_selection import train_test_split
 
 from src.agent import EmailOrganizerAgent
 from src.manager import AgentManager
-from src.util import simplify_html, coro
+from src.util import coro, simplify_html
 from xconfig import Config
 
 
@@ -39,10 +38,7 @@ email_collection = database_client.get_database(
 manager = AgentManager()
 email_agent = EmailOrganizerAgent(name="Aloyisius")
 
-manager.register_agent(css_selector_agent)
 manager.register_agent(email_agent)
-
-nlp = spacy.load("en_core_web_sm")
 
 
 # This method uses async because of the graph api.
@@ -56,83 +52,34 @@ async def collect_and_store_email():
             logger.exception("Failed to write email to the database")
 
 
-@app.command("generate_email_embeddings")
-def generate_email_embeddings():
-    # Assumes embeddings were not generated during collection.
-
-    def preprocess_function(email):
-        subject = email_agent._decrypt_message(email.subject)
-        body = simplify_html(email_agent._decrypt_message(email.body))
-        combined_text = f"Subject: {subject}\n\nBody: {body}"
-        doc = nlp(combined_text)
-        filtered_words = [
-            token.text for token in doc if not token.is_stop and not token.is_punct
-        ]
-        # Join the filtered words back into a string
-        cleaned_text = " ".join(filtered_words)
-        return cleaned_text
-
-    # Grab all the emails
-    model = SentenceTransformer("all-MiniLm-L6-V2")
-    email_cursor = email_collection.find({"_id": {"$gte": MinKey()}})
-
-    update_operations = list()
-    for doc in email_cursor:
-        # Generate the embeddings
-        email_content = preprocess_function(doc)
-        embedding = model.encode(email_content, show_progress_bar=False)
-
-        # Prepare the bulk update statements
-        update = UpdateOne(
-            {"_id": doc["_id"]}, update={"$set": {"embeddings": embedding.tolist()}}
-        )
-        update_operations.append(update)
-
-        if len(update_operations) == 1000:
-            logging.info(f"Updating {len(update_operations)} documents with embeddings")
-            result = email_collection.bulk_write(update_operations)
-
-            logging.info(
-                f"{result.modified_count} documents updated, moving to next batch"
-            )
-            update_operations = list()
-
-    logging.info("Done generating vector embeddings.")
-
-
 @app.command("classify_emails")
 def classify_emails():
-
     logging.info("Classifying emails using data in emails collections")
 
     # Grab all the emails
-    model = SentenceTransformer("all-MiniLm-L6-V2")
-    topic_model = BERTopic(verbose=True, min_topic_size=5)
+    topic_model = BERTopic(verbose=True, min_topic_size=10, nr_topics=50)
 
     # Exclude Amazon Emails ZOMG
     email_cursor = email_collection.find({"_id": {"$gte": MinKey()}})
 
-    raw_doc_strings = set()
-    embeddings = set()
+    raw_doc_strings = list()
+    embeddings = list()
 
     logging.info("Preparing training data from the database.")
     for idx, email in enumerate(email_cursor, start=1):
 
-        if idx % 1000 == 0:
+        if idx % 10 == 0:
             logging.info(f"Processed {idx} emails for training")
 
-        doc_string = None
         embedding = email.get("embeddings")
+        doc_string = email.get("embedding_text")
+
         if not embedding:
             logging.debug(f"{email['_id']} does not have embeddings")
             continue
 
-        if "amazon" in doc_string:
-            logging.info("Amazon is ruining my life.")
-            continue
-
-        raw_doc_strings.add(doc_string)
-        embeddings.add(embedding)
+        raw_doc_strings.append(doc_string)
+        embeddings.append(embedding)
 
     np_embeddings = np.array(embeddings)
 
@@ -150,6 +97,8 @@ def classify_emails():
         "topics_info.json", orient="records", lines=True
     )
     print(topic_model.get_topic_info())
+
+    code.interact()
 
 
 @app.command("train_on_emails")

@@ -35,19 +35,24 @@ class EmailMessage:
     conversation_id: str
     received_date: date
     embeddings: list = field(default_factory=list)
+    embedding_text: str = field(default_factory=str)
 
 
 class EmailOrganizerAgent(Agent):
+    """
+    Agent to organize emails.
+    """
+
     def __init__(self, name: str):
         super().__init__()
         self.cipher_suite = Fernet(config.ENCRYPTION_KEY)
-        self.nlp = spacy.load("en_core_web_sm")
-        self.model = SentenceTransformer("all-MiniLm-L6-V2")
+        self.nlp = spacy.load(config.SPACY_LIBRARY)
+        self.model = SentenceTransformer(config.MODEL)
 
-        tenant_id = os.environ.get("AZURE_TENANT_ID")
-        client_id = os.environ.get("AZURE_CLIENT_ID")
-        client_secret = os.environ.get("AZURE_CLIENT_SECRET")
-        graph_scopes = os.environ.get("AZURE_GRAPH_SCOPES").split(" ")
+        tenant_id = config.AZURE_TENANT_ID
+        client_id = config.AZURE_CLIENT_ID
+        client_secret = config.AZURE_CLIENT_SECRET
+        graph_scopes = config.AZURE_GRAPH_SCOPES
 
         client_secret_credential = ClientSecretCredential(
             tenant_id, client_id, client_secret
@@ -67,6 +72,9 @@ class EmailOrganizerAgent(Agent):
         return json.loads(decrypted_message.decode("utf-8"))
 
     async def get_user(self, user_id: str):
+        """
+        Retrieve user information from Microsoft Graph API.
+        """
         logger.info(f"retrieving user inbox: {user_id}")
         query_params = UsersRequestBuilder.UsersRequestBuilderGetQueryParameters(
             select=["displayName", "mail", "userPrincipalName"]
@@ -77,33 +85,62 @@ class EmailOrganizerAgent(Agent):
         )
         return user
 
-    async def get_inbox(self, user_id: str):
-        def preprocess_function(email):
+    def preprocess_function(self, email):
+        """
+        Preprocess the email content for embedding.
+        """
+        # Extract subject and body
+        if isinstance(email, dict):
+            subject = email.get("subject")
+            body = email.get("body")
+        else:
             subject = email.subject
-            body = simplify_html(email.body.content)
-            combined_text = f"Subject: {subject}\n\nBody: {body}"
-            doc = self.nlp(combined_text)
-            filtered_words = [
-                token.text for token in doc if not token.is_stop and not token.is_punct
-            ]
-            # Join the filtered words back into a string
-            cleaned_text = " ".join(filtered_words)
-            return cleaned_text
+            body = email.body.content
 
+        # Combine subject and body for embedding
+        combined_text = config.EMBEDDING_FORMAT_STRING.format(
+            subject=subject,
+            body=simplify_html(body).replace("{", "{{").replace("}", "}}"),
+        )
+
+        # Filter out stop words and punctuation
+        doc = self.nlp(combined_text)
+        filtered_words = [
+            token.text for token in doc if not token.is_stop and not token.is_punct
+        ]
+        # Join the filtered words back into a string
+        cleaned_text = " ".join(filtered_words)
+        return cleaned_text
+
+    async def get_inbox(self, user_id: str):
+        """
+        Retrieve emails from the user's inbox.
+        """
         logger.info("Grabbing emails for user.")
         query_params = {
             "$select": "from,isRead,receivedDateTime,subject,body",
-            "$top": 100,
+            "$top": 0,
             "$orderby": "receivedDateTime DESC",
         }
         request_configuration = RequestConfiguration(query_parameters=query_params)
 
+        # Grab the first page of emails
+        messages = await self.user_client.users.by_user_id(user_id).messages.get(
+            request_configuration=request_configuration
+        )
+
         while True:
-            messages = await self.user_client.users.by_user_id(user_id).messages.get(
-                request_configuration=request_configuration
-            )
+
             for message in messages.value:
-                email_content = preprocess_function(message)
+
+                # Preprocess the email content
+                try:
+                    email_content = self.preprocess_function(message)
+                except KeyError:
+                    logger.exception("Failed to process email")
+                    continue
+
+                # Generate embeddings
                 email_embeddings = self.model.encode(
                     email_content, show_progress_bar=False
                 )
@@ -116,15 +153,16 @@ class EmailOrganizerAgent(Agent):
                     received_date=message.received_date_time,
                     message_id=message.internet_message_id,
                     embeddings=email_embeddings.tolist(),
+                    embedding_text=self._encrypt_message(email_content),
                 )
                 yield email
 
+            # Check if there are more pages
             if messages.odata_next_link:
-                logger.info("Found another page!")
-                query_params["$top"] += 100
-                # Update the request configuration
-                request_configuration = RequestConfiguration(
-                    query_parameters=query_params
+                messages = (
+                    await self.user_client.users.by_user_id(user_id)
+                    .messages.with_url(messages.odata_next_link)
+                    .get()
                 )
             else:
                 logger.info("No more emails found")
