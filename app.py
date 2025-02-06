@@ -7,18 +7,10 @@ from bson import MinKey
 import numpy as np
 from pymongo import MongoClient
 import typer
-from sentence_transformers import SentenceTransformer
-from transformers import (
-    DistilBertForSequenceClassification,
-    DistilBertTokenizer,
-    Trainer,
-    TrainingArguments,
-)
-from sklearn.model_selection import train_test_split
 
 from src.agent import EmailOrganizerAgent
 from src.manager import AgentManager
-from src.util import coro, simplify_html
+from src.util import coro
 from xconfig import Config
 
 
@@ -100,6 +92,27 @@ def train_classifier_model():
     topic_model.save(f"emailClassifier-50")
 
     code.interact()
+
+
+@app.command("create_inbox_folders")
+@coro
+async def create_inbox_folders():
+    """
+    Create folders in the user's inbox based on the topics.
+    """
+    result = await email_agent.prepare_inbox_folders(
+        "khalen@4hp-4int.com", set(config.TOPIC_LABELS.values())
+    )
+
+
+@app.command("review_and_categorize")
+@coro
+async def review_categorize_todays_email():
+    """
+    Review and categorize today's email.
+    """
+    emails = await email_agent.get_todays_unread_emails("khalen@4hp-4int.com")
+    logger.info(f"Found {len(emails)} emails to categorize")
 
 
 if __name__ == "__main__":

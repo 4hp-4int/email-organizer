@@ -1,17 +1,20 @@
 from cryptography.fernet import Fernet
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from logging import getLogger
 import json
-import os
+import pytz
 
 from agent_protocol import Agent
 from azure.identity import ClientSecretCredential
 from msgraph import GraphServiceClient
+from msgraph.generated.models.o_data_errors.o_data_error import ODataError
 from msgraph.generated.users.users_request_builder import UsersRequestBuilder
+from msgraph.generated.users.item.messages.messages_request_builder import (
+    MessagesRequestBuilder,
+)
 from kiota_abstractions.base_request_configuration import RequestConfiguration
 from sentence_transformers import SentenceTransformer
-from openai import OpenAI
 import spacy
 
 from src.message import Message
@@ -21,7 +24,6 @@ from xconfig import Config
 logger = getLogger("Email-Organizer")
 
 # Configure your OpenAI API key (or set up your Ollama client accordingly)
-client = OpenAI(api_key=Config.OPENAI_API_KEY)
 config = Config()
 
 
@@ -80,10 +82,9 @@ class EmailOrganizerAgent(Agent):
             select=["displayName", "mail", "userPrincipalName"]
         )
         request_configuration = RequestConfiguration(query_parameters=query_params)
-        user = await self.user_client.users.by_user_id(user_id).get(
-            request_configuration=request_configuration
+        return await self.user_client.users.by_user_id(user_id).get(
+            request_configuration
         )
-        return user
 
     def preprocess_function(self, email):
         """
@@ -119,11 +120,12 @@ class EmailOrganizerAgent(Agent):
         Retrieve emails from the user's inbox.
         """
         logger.info("Grabbing emails for user.")
-        query_params = {
-            "$select": "from,isRead,receivedDateTime,subject,body",
-            "$top": 0,
-            "$orderby": "receivedDateTime DESC",
-        }
+
+        query_params = MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters(
+            select="from,isRead,receivedDateTime,subject,body",
+            top=100,
+            orderby="receivedDateTime DESC",
+        )
         request_configuration = RequestConfiguration(query_parameters=query_params)
 
         # Grab the first page of emails
@@ -169,6 +171,83 @@ class EmailOrganizerAgent(Agent):
             else:
                 logger.info("No more emails found")
                 break
+
+    async def get_todays_unread_emails(self, user_id):
+        """
+        Fetch unread emails received today for the given user.
+        """
+        todays_emails = list()
+        logger.info("Fetching today's unread emails.")
+
+        # Get today's date in ISO 8601 format (UTC)
+        today = (
+            datetime.now(pytz.UTC)
+            .replace(hour=0, minute=0, second=0, microsecond=0)
+            .isoformat()
+        )
+
+        # Query parameters to filter unread messages from today
+
+        query_params = MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters(
+            filter=f"isRead eq false and receivedDateTime ge {today}",
+            top=100,
+            orderby="receivedDateTime desc",
+            select="from,isRead,receivedDateTime,subject,body",
+        )
+        request_configuration = RequestConfiguration(query_parameters=query_params)
+
+        while True:
+            try:
+                # Fetch unread messages
+                messages = await self.user_client.users.by_user_id(
+                    user_id
+                ).messages.get(request_configuration=request_configuration)
+
+                todays_emails.append(messages.value)
+
+                # Check if there are more pages
+                if messages.odata_next_link:
+                    messages = (
+                        await self.user_client.users.by_user_id(user_id)
+                        .messages.with_url(messages.odata_next_link)
+                        .get()
+                    )
+                else:
+                    logger.info("No more emails found")
+                    break
+
+                # Return the emails
+
+                todays_emails += messages.value
+            except ODataError as e:
+                logger.error(f"Error fetching emails: {e}")
+                raise e
+
+        return todays_emails
+
+    async def prepare_inbox_folders(self, user_id: str, topics: list):
+        """
+        We need to prepare the inbox categories for the user in Outlook.
+        """
+        from msgraph.generated.models.mail_folder import MailFolder
+
+        mail_folder_models = [
+            MailFolder(
+                display_name=label,
+                is_hidden=False,
+                parent_folder_id="inbox",
+            )
+            for label in topics
+        ]
+        for folder in mail_folder_models:
+
+            try:
+                await self.user_client.users.by_user_id(user_id).mail_folders.post(
+                    folder
+                )
+            except Exception as e:
+                logger.exception(f"Failed to create folder {folder.display_name}")
+                continue
 
     def on_message(self, message: Message) -> Message:
         """
