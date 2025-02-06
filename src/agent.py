@@ -100,7 +100,9 @@ class EmailOrganizerAgent(Agent):
         # Combine subject and body for embedding
         combined_text = config.EMBEDDING_FORMAT_STRING.format(
             subject=subject,
-            body=simplify_html(body).replace("{", "{{").replace("}", "}}"),
+            body=simplify_html(body)
+            .replace("{", "{{")
+            .replace("}", "}}"),  ## this is for emails that have curly braces in them
         )
 
         # Filter out stop words and punctuation

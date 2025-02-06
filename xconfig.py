@@ -2,6 +2,8 @@ import os
 
 from dotenv import load_dotenv
 
+from src.topic_labels import topic_labels
+
 load_dotenv()
 
 
@@ -23,6 +25,8 @@ class Config:
     OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 
     SPACY_LIBRARY = "en_core_web_sm"
+
+    TOPIC_LABELS = topic_labels
 
     @property
     def connection_string(self) -> str:
