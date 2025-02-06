@@ -1,3 +1,23 @@
+"""
+This module provides a command-line interface (CLI) for an email organization system.
+It includes commands for collecting and storing emails, training a classifier model,
+creating inbox folders, and reviewing and categorizing today's emails.
+
+Classes:
+    None
+
+Functions:
+    collect_and_store_email(user_id: str)
+
+    train_classifier_model()
+
+    create_inbox_folders(user_id: str)
+
+    review_categorize_todays_email(user_id: str, model_path: str, dry_run: bool)
+        Review and categorize today's email using a pre-trained topic model.
+
+"""
+
 import code
 from dataclasses import asdict
 import logging
@@ -18,7 +38,7 @@ logger = logging.getLogger("Email-Organizer")
 logging.basicConfig(level=logging.INFO)
 formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 
-app = typer.Typer(help="Agentic Web Scraper Cli")
+app = typer.Typer(help="Email Organizer CLI")
 config = Config()
 
 database_client = MongoClient(config.connection_string)
@@ -36,9 +56,21 @@ manager.register_agent(email_agent)
 # This method uses async because of the graph api.
 @app.command("collect_and_store")
 @coro
-async def collect_and_store_email():
+async def collect_and_store_email(
+    user_id: str = typer.Option(
+        "khalen@4hp-4int.com", help="User ID to categorize emails for."
+    ),
+):
+    """
+    Asynchronously collects emails for a specified user and stores them in the database.
 
-    async for message in email_agent.get_inbox("khalen@4hp-4int.com"):
+    Args:
+        user_id (str): User ID to categorize emails for. Defaults to "khalen@4hp-4int.com".
+
+    Raises:
+        Exception: If the email fails to be written to the database.
+    """
+    async for message in email_agent.get_inbox(user_id):
         result = email_collection.insert_one(asdict(message))
         if not result:
             logger.exception("Failed to write email to the database")
@@ -46,6 +78,20 @@ async def collect_and_store_email():
 
 @app.command("train_classifier_model")
 def train_classifier_model():
+    """
+    Train a classifier model using BERTopic on email data from the database.
+
+    This function performs the following steps:
+    1. Retrieves all emails from the email collection in the database.
+    2. Prepares training data by extracting embeddings and decrypted text from emails.
+    3. Trains a BERTopic model on the extracted data.
+    4. Visualizes the topics and saves the visualization to an HTML file.
+    5. Saves the topic information to a JSON file.
+    6. Prints the topics to the console.
+    7. Saves the trained BERTopic model to a file.
+
+    Logging is used to provide information about the progress of each step.
+    """
     logging.info("Classifying emails using data in emails collections")
 
     # Grab all the emails
@@ -111,8 +157,6 @@ async def create_inbox_folders(
     if result:
         logger.info("Successfully created inbox folders")
 
-    # Store the inbox destination ids.
-
 
 @app.command("review_and_categorize")
 @coro
@@ -130,6 +174,15 @@ async def review_categorize_todays_email(
 ):
     """
     Review and categorize today's email.
+        Args:
+        user_id (str): User ID to categorize emails for. Default is "khalen@4hp-4int.com".
+        model_path (str): Path to the topic model. Default is "emailClassifier-35".
+        dry_run (bool): Perform a dry run without categorizing emails. Default is True.
+
+
+    This function loads a pre-trained topic model and uses it to categorize today's unread emails for the specified user.
+    If dry_run is set to True, it will only log the categorization results without making any changes.
+    Otherwise, it will categorize the emails and move them to the appropriate folders.
     """
     topic_model = BERTopic.load(model_path, embedding_model=email_agent.model)
 
