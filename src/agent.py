@@ -10,16 +10,19 @@ from azure.identity import ClientSecretCredential
 from msgraph import GraphServiceClient
 from msgraph.generated.users.users_request_builder import UsersRequestBuilder
 from kiota_abstractions.base_request_configuration import RequestConfiguration
+from sentence_transformers import SentenceTransformer
 from openai import OpenAI
+import spacy
 
-from src.prompts import AGENT_SCRAPER_PROMPT
 from src.message import Message
+from src.util import simplify_html
 from xconfig import Config
 
 logger = getLogger("Email-Organizer")
 
 # Configure your OpenAI API key (or set up your Ollama client accordingly)
 client = OpenAI(api_key=Config.OPENAI_API_KEY)
+config = Config()
 
 
 @dataclass
@@ -34,66 +37,12 @@ class EmailMessage:
     embeddings: list = field(default_factory=list)
 
 
-class CSSSelectorAgent(Agent):
-
-    def __init__(self, name: str):
-        super().__init__()
-        self.name = name
-
-    """
-    An agent that receives HTML content and an extraction prompt,
-    uses an LLM to determine interesting HTML elements, and outputs
-    CSS selectors for those elements.
-    """
-
-    def on_message(self, message: Message) -> Message:
-        # Retrieve HTML and prompt from the incoming message payload.
-        html_content = message.payload.get("html", "")
-        extraction_prompt = message.payload.get("prompt", "")
-
-        llm_prompt = AGENT_SCRAPER_PROMPT.format(
-            html_content=html_content, extraction_prompt=extraction_prompt
-        )
-
-        # Use the LLM to generate a response.
-        try:
-            response = client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert in web scraping and HTML analysis.",
-                    },
-                    {"role": "user", "content": llm_prompt},
-                ],
-                temperature=0.2,  # Lower temperature for more deterministic output
-                max_tokens=300,
-            )
-            # Extract the text content from the LLM response.
-            text_response = response.choices[0].message.content.strip()
-        except Exception as e:
-            error_response = {"error": f"Error calling LLM API: {str(e)}"}
-            return Message(sender=self.name, payload={"selectors": error_response})
-
-        # Try to parse the LLM response as JSON.
-        try:
-            selectors = json.loads(text_response)
-        except json.JSONDecodeError as e:
-            # In case parsing fails, return the raw output for debugging.
-            selectors = {
-                "error": "Failed to parse JSON from LLM output.",
-                "raw_output": text_response,
-                "exception": str(e),
-            }
-
-        # Return the CSS selectors in a message.
-        return Message(sender=self.name, payload={"selectors": selectors})
-
-
 class EmailOrganizerAgent(Agent):
     def __init__(self, name: str):
         super().__init__()
-        self.cipher_suite = Fernet(os.environ.get("ENCRYPTION_KEY"))
+        self.cipher_suite = Fernet(config.ENCRYPTION_KEY)
+        self.nlp = spacy.load("en_core_web_sm")
+        self.model = SentenceTransformer("all-MiniLm-L6-V2")
 
         tenant_id = os.environ.get("AZURE_TENANT_ID")
         client_id = os.environ.get("AZURE_CLIENT_ID")
@@ -129,10 +78,22 @@ class EmailOrganizerAgent(Agent):
         return user
 
     async def get_inbox(self, user_id: str):
+        def preprocess_function(email):
+            subject = email.subject
+            body = simplify_html(email.body.content)
+            combined_text = f"Subject: {subject}\n\nBody: {body}"
+            doc = self.nlp(combined_text)
+            filtered_words = [
+                token.text for token in doc if not token.is_stop and not token.is_punct
+            ]
+            # Join the filtered words back into a string
+            cleaned_text = " ".join(filtered_words)
+            return cleaned_text
+
         logger.info("Grabbing emails for user.")
         query_params = {
             "$select": "from,isRead,receivedDateTime,subject,body",
-            "$top": 25,
+            "$top": 100,
             "$orderby": "receivedDateTime DESC",
         }
         request_configuration = RequestConfiguration(query_parameters=query_params)
@@ -142,6 +103,10 @@ class EmailOrganizerAgent(Agent):
                 request_configuration=request_configuration
             )
             for message in messages.value:
+                email_content = preprocess_function(message)
+                email_embeddings = self.model.encode(
+                    email_content, show_progress_bar=False
+                )
                 email = EmailMessage(
                     subject=self._encrypt_message(message.subject),
                     body=self._encrypt_message(message.body.content),
@@ -150,12 +115,13 @@ class EmailOrganizerAgent(Agent):
                     conversation_id=message.conversation_id,
                     received_date=message.received_date_time,
                     message_id=message.internet_message_id,
+                    embeddings=email_embeddings.tolist(),
                 )
                 yield email
 
             if messages.odata_next_link:
                 logger.info("Found another page!")
-                query_params["$top"] += 25
+                query_params["$top"] += 100
                 # Update the request configuration
                 request_configuration = RequestConfiguration(
                     query_parameters=query_params

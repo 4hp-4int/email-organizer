@@ -8,7 +8,9 @@ load_dotenv()
 class Config:
 
     EMAIL_DATA_DATABASE = "email_organizer"
-    EMAIL_DATA_COLLECTION = "emails"
+    EMAIL_DATA_COLLECTION = "emails_v2"
+
+    ENCRYPTION_KEY = os.environ["ENCRYPTION_KEY"]
 
     OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 

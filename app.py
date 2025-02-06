@@ -1,11 +1,10 @@
 from dataclasses import asdict
 import logging
-from typing import List, Dict
 
 from bertopic import BERTopic
 from bson import MinKey
 import numpy as np
-import pandas as pd
+import spacy
 from pymongo import MongoClient
 from pymongo.operations import UpdateOne
 import typer
@@ -18,7 +17,7 @@ from transformers import (
 )
 from sklearn.model_selection import train_test_split
 
-from src.agent import CSSSelectorAgent, EmailOrganizerAgent
+from src.agent import EmailOrganizerAgent
 from src.manager import AgentManager
 from src.util import simplify_html, coro
 from xconfig import Config
@@ -38,38 +37,12 @@ email_collection = database_client.get_database(
 
 
 manager = AgentManager()
-css_selector_agent = CSSSelectorAgent(name="CSSSelectorAgent")
 email_agent = EmailOrganizerAgent(name="Aloyisius")
 
 manager.register_agent(css_selector_agent)
 manager.register_agent(email_agent)
 
-
-def aggregate_chunk_results(results: List[Dict]) -> Dict:
-    """
-    Combine the individual chunk results into a unified representation.
-    Here we simply merge the tag counts, but you could design a more complex structure.
-    """
-    aggregated = {"dom_map": {}, "snippets": []}
-    for result in results:
-        # Aggregate the tag counts
-        for tag, count in result["dom_map"].items():
-            aggregated["dom_map"][tag] = aggregated["dom_map"].get(tag, 0) + count
-        # Save the snippet for reference
-        aggregated["snippets"].append(result["snippet"])
-    return aggregated
-
-
-import asyncio
-from functools import wraps
-
-
-def coro(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        return asyncio.run(f(*args, **kwargs))
-
-    return wrapper
+nlp = spacy.load("en_core_web_sm")
 
 
 # This method uses async because of the graph api.
@@ -88,10 +61,16 @@ def generate_email_embeddings():
     # Assumes embeddings were not generated during collection.
 
     def preprocess_function(email):
-        subject = email_agent._decrypt_message(email["subject"])
-        body = simplify_html(email_agent._decrypt_message(email["body"]))
+        subject = email_agent._decrypt_message(email.subject)
+        body = simplify_html(email_agent._decrypt_message(email.body))
         combined_text = f"Subject: {subject}\n\nBody: {body}"
-        return combined_text
+        doc = nlp(combined_text)
+        filtered_words = [
+            token.text for token in doc if not token.is_stop and not token.is_punct
+        ]
+        # Join the filtered words back into a string
+        cleaned_text = " ".join(filtered_words)
+        return cleaned_text
 
     # Grab all the emails
     model = SentenceTransformer("all-MiniLm-L6-V2")
@@ -126,12 +105,6 @@ def classify_emails():
 
     logging.info("Classifying emails using data in emails collections")
 
-    def preprocess_function(email):
-        subject = email_agent._decrypt_message(email["subject"])
-        body = simplify_html(email_agent._decrypt_message(email["body"]))
-        combined_text = f"Subject: {subject}\n\nBody: {body}"
-        return combined_text.lower()
-
     # Grab all the emails
     model = SentenceTransformer("all-MiniLm-L6-V2")
     topic_model = BERTopic(verbose=True, min_topic_size=5)
@@ -139,8 +112,8 @@ def classify_emails():
     # Exclude Amazon Emails ZOMG
     email_cursor = email_collection.find({"_id": {"$gte": MinKey()}})
 
-    raw_doc_strings = list()
-    embeddings = list()
+    raw_doc_strings = set()
+    embeddings = set()
 
     logging.info("Preparing training data from the database.")
     for idx, email in enumerate(email_cursor, start=1):
@@ -148,7 +121,7 @@ def classify_emails():
         if idx % 1000 == 0:
             logging.info(f"Processed {idx} emails for training")
 
-        doc_string = preprocess_function(email)
+        doc_string = None
         embedding = email.get("embeddings")
         if not embedding:
             logging.debug(f"{email['_id']} does not have embeddings")
@@ -158,8 +131,8 @@ def classify_emails():
             logging.info("Amazon is ruining my life.")
             continue
 
-        raw_doc_strings.append(doc_string)
-        embeddings.append(embedding)
+        raw_doc_strings.add(doc_string)
+        embeddings.add(embedding)
 
     np_embeddings = np.array(embeddings)
 
