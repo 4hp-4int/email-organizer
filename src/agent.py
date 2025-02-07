@@ -276,11 +276,7 @@ class EmailOrganizerAgent(Agent):
             else:
                 break
 
-        return {
-            folder.display_name: folder.id
-            for folder in mail_folders
-            if folder.display_name in config.TOPIC_LABELS.values()
-        }
+        return {folder.display_name: folder.id for folder in mail_folders}
 
     async def categorize_emails(
         self,
@@ -291,27 +287,27 @@ class EmailOrganizerAgent(Agent):
         """
         Categorize emails based on the provided labels.
         """
-
+        operation_log = list()
         for message, label in messages_labels:
             # Skip if the label is "unknown"
             if label == "error":
+                logger.info("OKAY")
                 continue
 
             # Skip if the email is already in the correct folder
             if message.parent_folder_id == folder_destination_ids.get(label):
-                logger.debug("Email already in the correct folder")
+                logger.info("Email already in the correct folder")
                 continue
 
             # Skip if the label is not in the config
             if not folder_destination_ids.get(label):
+                logger.info(f"{label}, {folder_destination_ids.keys()}")
                 continue
 
             # Move the email to the appropriate folder
             logger.info(f"Categorizing email {message.id} as {label}")
             move_request_body = MovePostRequestBody()
             move_request_body.destination_id = folder_destination_ids.get(label)
-
-            operation_log = list()
 
             # Categorize the email via the Graph API
             try:
@@ -328,6 +324,8 @@ class EmailOrganizerAgent(Agent):
                         "label": label,
                     }
                 )
+                operation_log.append(move_operation)
+
             except ODataError as e:
                 logger.exception(
                     f"Failed to categorize email {message.subject} - error: {e}"
@@ -336,8 +334,6 @@ class EmailOrganizerAgent(Agent):
             except Exception as e:
                 logger.exception(f"Failed to write operation to database - error: {e}")
                 break
-
-            operation_log.append(move_operation)
 
         return operation_log
 

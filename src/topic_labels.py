@@ -7,7 +7,7 @@ topic_labels = {
     -1: "unknown",
     0: "Online Shopping",
     1: "Orders",
-    2: "Career - Technology",
+    2: "Technology",
     3: "Bills, Statements and Receipts",
     4: "Entertainment - PC Gaming",
     5: "Retail - Clothing and Apparel",
