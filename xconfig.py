@@ -23,11 +23,12 @@ class Config:
     ENCRYPTION_KEY = os.environ["ENCRYPTION_KEY"]
     MODEL = "all-MiniLm-L6-V2"
 
-    OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
+    HF_TOKEN = os.environ["HF_TOKEN"]
 
     SPACY_LIBRARY = "en_core_web_sm"
 
     TOPIC_LABELS = topic_labels
+    LLAMA_MAX_NEW_TOKENS = 300
 
     @property
     def connection_string(self) -> str:

@@ -24,12 +24,14 @@ from loguru import logger
 
 from bertopic import BERTopic
 from bson import MinKey
+from hdbscan import HDBSCAN
+from umap import UMAP
 import numpy as np
 from pymongo import MongoClient
 import typer
 
 from src.agent import EmailOrganizerAgent
-from src.manager import AgentManager
+from src.llama_agent import LlamaAgent
 from src.util import coro
 from xconfig import Config
 
@@ -45,11 +47,6 @@ email_collection = database_client.get_database(
 email_run_log_collection = database_client.get_database(
     config.EMAIL_DATA_DATABASE
 ).get_collection(config.EMAIL_RUN_LOG_COLLECTION)
-
-manager = AgentManager()
-email_agent = EmailOrganizerAgent(name="Aloyisius")
-
-manager.register_agent(email_agent)
 
 
 # This method uses async because of the graph api.
@@ -69,6 +66,8 @@ async def collect_and_store_email(
     Raises:
         Exception: If the email fails to be written to the database.
     """
+    email_agent = EmailOrganizerAgent(name="Aloyisius")
+
     async for message in email_agent.get_inbox(user_id):
         result = email_collection.insert_one(asdict(message))
         if not result:
@@ -77,9 +76,8 @@ async def collect_and_store_email(
 
 @app.command("train_classifier_model")
 def train_classifier_model(
-    model_path: str = typer.Option(
-        "emailClassifier-35", help="Path to the topic model."
-    )
+    model_path: str = typer.Option("newModel.model", help="Path to the topic model."),
+    llama2: bool = typer.Option(False, help="Use Llama2 for text generation."),
 ):
     """
     Train a classifier model using BERTopic on email data from the database.
@@ -95,15 +93,41 @@ def train_classifier_model(
 
     Logging is used to provide information about the progress of each step.
     """
+    email_agent = EmailOrganizerAgent(name="Aloyisius")
+
     logger.info("Classifying emails using data in emails collections")
 
-    # Grab all the emails
-    topic_model = BERTopic(verbose=True, min_topic_size=10, nr_topics=13)
+    if not llama2:
+        # Grab all the emails
+        topic_model = BERTopic(verbose=True, min_topic_size=10, nr_topics=13)
+    else:
+        llama_agent = LlamaAgent()
+        umap_model = UMAP(
+            n_neighbors=15,
+            n_components=5,
+            min_dist=0.0,
+            metric="cosine",
+            random_state=42,
+        )
+        hdbscan_model = HDBSCAN(
+            min_cluster_size=150,
+            metric="euclidean",
+            cluster_selection_method="eom",
+            prediction_data=True,
+        )
+        topic_model = BERTopic(
+            verbose=True,
+            embedding_model=email_agent.model,
+            umap_model=umap_model,
+            hdbscan_model=hdbscan_model,
+            representation_model=llama_agent.llama2,
+        )
 
     email_cursor = email_collection.find({"_id": {"$gte": MinKey()}})
 
     raw_doc_strings = list()
     embeddings = list()
+    subjects = list()
 
     logger.info("Preparing training data from the database.")
     for idx, email in enumerate(email_cursor, start=1):
@@ -118,16 +142,29 @@ def train_classifier_model(
             logger.debug(f"{email['_id']} does not have embeddings")
             continue
 
-        raw_doc_strings.append(doc_string)
+        raw_doc_strings.append(doc_string[:4096])
         embeddings.append(embedding)
 
+        subjects.append(email_agent._decrypt_message(email.get("subject")))
+
     np_embeddings = np.array(embeddings)
+
+    # Reduce the embeddings for visualization
+    reduced_embeddings = UMAP(
+        n_neighbors=15, n_components=2, min_dist=0.0, metric="cosine", random_state=42
+    ).fit_transform(embeddings)
 
     logger.info("Training Bert on the Topics")
     topic_model.fit_transform(documents=raw_doc_strings, embeddings=np_embeddings)
 
     logger.info("Writing topics to HTML File")
-    fig = topic_model.visualize_topics()
+    fig = topic_model.visualize_documents(
+        subjects,
+        reduced_embeddings=reduced_embeddings,
+        hide_annotations=True,
+        hide_document_hover=False,
+        custom_labels=True,
+    )
     fig.write_html("topics.html")
 
     # Save to JSON
@@ -151,6 +188,8 @@ async def create_inbox_folders(
     """
     Create folders in the user's inbox based on the topics.
     """
+    email_agent = EmailOrganizerAgent(name="Aloyisius")
+
     result = await email_agent.prepare_inbox_folders(
         user_id, set(config.TOPIC_LABELS.values())
     )
@@ -185,6 +224,8 @@ async def review_categorize_todays_email(
     If dry_run is set to True, it will only log the categorization results without making any changes.
     Otherwise, it will categorize the emails and move them to the appropriate folders.
     """
+    email_agent = EmailOrganizerAgent(name="Aloyisius")
+
     topic_model = BERTopic.load(model_path, embedding_model=email_agent.model)
 
     todays_emails = list()

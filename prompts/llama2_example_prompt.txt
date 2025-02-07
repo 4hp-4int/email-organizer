@@ -1,0 +1,10 @@
+I have a topic that contains the following emails:
+- Subject: Your January Financial Report - Body: View your detailed financial report for January. See your spending, savings, and investment performance.
+- Subject: Bill Reminder - Electricity - Body: Your electricity bill is due on February 15th. Pay online or at any authorized payment center.
+- Subject: Credit Card Statement Available - Body: Your latest credit card statement is now available online. Check your transactions and payment details.
+
+The topic is described by the following keywords: 'bills, statements, financial, report, payment, credit card, electricity, due, transactions, spending'.
+
+Based on the information about the emails above, please create a short label for this topic. Make sure you only return the label and nothing more.
+
+[/INST] Finances and Bills

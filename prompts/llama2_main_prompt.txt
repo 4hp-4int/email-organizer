@@ -1,0 +1,8 @@
+[INST]
+I have a topic that contains the following documents:
+[DOCUMENTS]
+
+The topic is described by the following keywords: '[KEYWORDS]'.
+
+Based on the information about the topic above, please create a short label of this topic. Make sure you to only return the label and nothing more.
+[/INST]

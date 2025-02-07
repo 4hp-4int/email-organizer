@@ -6,7 +6,6 @@ import json
 from typing import List
 import pytz
 
-from agent_protocol import Agent
 from azure.identity import ClientSecretCredential
 from msgraph import GraphServiceClient
 from msgraph.generated.models.o_data_errors.o_data_error import ODataError
@@ -46,7 +45,7 @@ class EmailMessage:
     embedding_text: str = field(default_factory=str)
 
 
-class EmailOrganizerAgent(Agent):
+class EmailOrganizerAgent:
     """
     Agent to organize emails.
     """
@@ -336,10 +335,3 @@ class EmailOrganizerAgent(Agent):
                 break
 
         return operation_log
-
-    def on_message(self, message: Message) -> Message:
-        """
-        Takes in a batch of email messages, and assigns a category to each email.
-        """
-
-        return True
