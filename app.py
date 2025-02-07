@@ -208,6 +208,8 @@ async def review_categorize_todays_email(
         else:
             logger.error("Failed to categorize today's emails")
     else:
+
+        # Debug output
         for email_label, topic in zip(emails_labels, new_topics):
             email, label = email_label
             logger.info(

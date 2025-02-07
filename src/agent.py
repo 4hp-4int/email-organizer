@@ -1,7 +1,7 @@
 from cryptography.fernet import Fernet
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from logging import getLogger
+from loguru import logger
 import json
 import pytz
 
@@ -26,8 +26,6 @@ import spacy
 from src.message import Message
 from src.util import simplify_html
 from xconfig import Config
-
-logger = getLogger("Email-Organizer")
 
 # Configure your OpenAI API key (or set up your Ollama client accordingly)
 config = Config()
@@ -299,6 +297,7 @@ class EmailOrganizerAgent(Agent):
 
             # Skip if the email is already in the correct folder
             if message.parent_folder_id == folder_destination_ids.get(label):
+                logger.debug("Email already in the correct folder")
                 continue
 
             # Skip if the label is not in the config
