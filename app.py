@@ -73,7 +73,11 @@ async def collect_and_store_email(
 
 
 @app.command("train_classifier_model")
-def train_classifier_model():
+def train_classifier_model(
+    model_path: str = typer.Option(
+        "emailClassifier-35", help="Path to the topic model."
+    )
+):
     """
     Train a classifier model using BERTopic on email data from the database.
 
@@ -117,9 +121,7 @@ def train_classifier_model():
     np_embeddings = np.array(embeddings)
 
     logger.info("Training Bert on the Topics")
-    topics, probs = topic_model.fit_transform(
-        documents=raw_doc_strings, embeddings=np_embeddings
-    )
+    topic_model.fit_transform(documents=raw_doc_strings, embeddings=np_embeddings)
 
     logger.info("Writing topics to HTML File")
     fig = topic_model.visualize_topics()
@@ -129,9 +131,9 @@ def train_classifier_model():
     topic_model.get_topic_info().to_json(
         "topics_info.json", orient="records", lines=True
     )
-    print(topic_model.get_topics())
+    logger.debug(topic_model.get_topics())
 
-    topic_model.save(f"emailClassifier-13")
+    topic_model.save(f"{model_path}")
 
     code.interact()
 
