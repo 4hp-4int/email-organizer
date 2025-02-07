@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from loguru import logger
 import json
+from typing import List
 import pytz
 
 from agent_protocol import Agent
@@ -14,6 +15,7 @@ from msgraph.generated.users.users_request_builder import UsersRequestBuilder
 from msgraph.generated.users.item.messages.item.move.move_post_request_body import (
     MovePostRequestBody,
 )
+from pymongo import InsertOne
 
 
 from msgraph.generated.users.item.messages.messages_request_builder import (
@@ -285,7 +287,7 @@ class EmailOrganizerAgent(Agent):
         user_id: str,
         messages_labels: tuple[Message, str],
         folder_destination_ids: dict[str, str],
-    ):
+    ) -> List[dict[str, str]]:
         """
         Categorize emails based on the provided labels.
         """
@@ -304,21 +306,40 @@ class EmailOrganizerAgent(Agent):
             if not folder_destination_ids.get(label):
                 continue
 
+            # Move the email to the appropriate folder
             logger.info(f"Categorizing email {message.id} as {label}")
             move_request_body = MovePostRequestBody()
             move_request_body.destination_id = folder_destination_ids.get(label)
+
+            operation_log = list()
+
             # Categorize the email via the Graph API
             try:
                 await self.user_client.users.by_user_id(user_id).messages.by_message_id(
                     message_id=message.id
                 ).move.post(move_request_body)
+
+                # Log the categorization
+                move_operation = InsertOne(
+                    {
+                        "user_id": user_id,
+                        "message_id": message.id,
+                        "subject": self._encrypt_message(message.subject),
+                        "label": label,
+                    }
+                )
             except ODataError as e:
                 logger.exception(
                     f"Failed to categorize email {message.subject} - error: {e}"
                 )
                 break
+            except Exception as e:
+                logger.exception(f"Failed to write operation to database - error: {e}")
+                break
 
-        return True
+            operation_log.append(move_operation)
+
+        return operation_log
 
     def on_message(self, message: Message) -> Message:
         """

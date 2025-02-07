@@ -42,6 +42,9 @@ email_collection = database_client.get_database(
     Config.EMAIL_DATA_DATABASE
 ).get_collection(Config.EMAIL_DATA_COLLECTION)
 
+email_run_log_collection = database_client.get_database(
+    config.EMAIL_DATA_DATABASE
+).get_collection(config.EMAIL_RUN_LOG_COLLECTION)
 
 manager = AgentManager()
 email_agent = EmailOrganizerAgent(name="Aloyisius")
@@ -199,12 +202,21 @@ async def review_categorize_todays_email(
     emails_labels = list(zip(raw_emails, new_labels))
 
     if not dry_run:
-        result = await email_agent.categorize_emails(
+        operation_log = await email_agent.categorize_emails(
             user_id, emails_labels, folder_destination_ids
         )
 
-        if result:
-            logger.info("Successfully categorized today's emails")
+        if operation_log:
+            logger.info(
+                "Successfully categorized today's emails, storing run results to database"
+            )
+            result = email_run_log_collection.bulk_write(operation_log)
+
+            if not result.acknowledged:
+                logger.error("Failed to store run results to database")
+            else:
+                logger.info("Successfully stored run results to database")
+
         else:
             logger.error("Failed to categorize today's emails")
     else:
