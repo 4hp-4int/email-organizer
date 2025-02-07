@@ -20,7 +20,7 @@ Functions:
 
 import code
 from dataclasses import asdict
-import logging
+from loguru import logger
 
 from bertopic import BERTopic
 from bson import MinKey
@@ -33,10 +33,6 @@ from src.manager import AgentManager
 from src.util import coro
 from xconfig import Config
 
-
-logger = logging.getLogger("Email-Organizer")
-logging.basicConfig(level=logging.INFO)
-formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 
 app = typer.Typer(help="Email Organizer CLI")
 config = Config()
@@ -92,7 +88,7 @@ def train_classifier_model():
 
     Logging is used to provide information about the progress of each step.
     """
-    logging.info("Classifying emails using data in emails collections")
+    logger.info("Classifying emails using data in emails collections")
 
     # Grab all the emails
     topic_model = BERTopic(verbose=True, min_topic_size=10, nr_topics=13)
@@ -102,17 +98,17 @@ def train_classifier_model():
     raw_doc_strings = list()
     embeddings = list()
 
-    logging.info("Preparing training data from the database.")
+    logger.info("Preparing training data from the database.")
     for idx, email in enumerate(email_cursor, start=1):
 
         if idx % 10 == 0:
-            logging.info(f"Processed {idx} emails for training")
+            logger.info(f"Processed {idx} emails for training")
 
         embedding = email.get("embeddings")
         doc_string = email_agent._decrypt_message(email.get("embedding_text"))
 
         if not embedding:
-            logging.debug(f"{email['_id']} does not have embeddings")
+            logger.debug(f"{email['_id']} does not have embeddings")
             continue
 
         raw_doc_strings.append(doc_string)
@@ -120,12 +116,12 @@ def train_classifier_model():
 
     np_embeddings = np.array(embeddings)
 
-    logging.info("Training Bert on the Topics")
+    logger.info("Training Bert on the Topics")
     topics, probs = topic_model.fit_transform(
         documents=raw_doc_strings, embeddings=np_embeddings
     )
 
-    logging.info("Writing topics to HTML File")
+    logger.info("Writing topics to HTML File")
     fig = topic_model.visualize_topics()
     fig.write_html("topics.html")
 

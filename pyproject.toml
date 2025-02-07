@@ -24,6 +24,7 @@ pandas = "^2.2.3"
 spacy = "^3.8.4"
 numpy = "2.1"
 ipython = "^8.32.0"
+loguru = "^0.7.3"
 
 
 [tool.poetry.group.dev.dependencies]
