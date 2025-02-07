@@ -124,19 +124,7 @@ class EmailOrganizerAgent(Agent):
 
     async def get_inbox(self, user_id: str):
         """
-        Asynchronously retrieve and process emails from the user's inbox.
-
-        Args:
-            user_id (str): The ID of the user whose emails are to be retrieved.
-
-        Yields:
-            EmailMessage: An object containing the processed and encrypted email details.
-
-        Raises:
-            KeyError: If there is an issue processing the email content.
-
-        Logs:
-            Logs information about the email retrieval process and any exceptions encountered.
+        Retrieve emails from the user's inbox.
         """
         logger.info("Grabbing emails for user.")
 
@@ -193,14 +181,7 @@ class EmailOrganizerAgent(Agent):
 
     async def get_todays_unread_emails(self, user_id):
         """
-        Args:
-            user_id (str): The ID of the user whose unread emails are to be fetched.
-
-        Returns:
-            list: A list of unread emails received today.
-
-        Raises:
-            ODataError: If there is an error fetching the emails.
+        Fetch unread emails received today for the given user.
         """
         todays_emails = list()
         logger.info("Fetching today's unread emails.")
