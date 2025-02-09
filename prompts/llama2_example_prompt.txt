@@ -7,4 +7,4 @@ The topic is described by the following keywords: 'bills, statements, financial,
 
 Based on the information about the emails above, please create a short label for this topic. Make sure you only return the label and nothing more.
 
-[/INST] Finances and Bills
+[/INST]

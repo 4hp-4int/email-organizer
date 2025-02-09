@@ -54,7 +54,7 @@ class EmailOrganizerAgent:
         super().__init__()
         self.cipher_suite = Fernet(config.ENCRYPTION_KEY)
         self.nlp = spacy.load(config.SPACY_LIBRARY)
-        self.model = SentenceTransformer(config.MODEL)
+        self.model = SentenceTransformer(config.MODEL, device="cuda")
 
         tenant_id = config.AZURE_TENANT_ID
         client_id = config.AZURE_CLIENT_ID

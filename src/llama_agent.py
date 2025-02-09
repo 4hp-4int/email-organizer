@@ -1,5 +1,8 @@
 from typing import List
 from bertopic.representation import TextGeneration
+from hdbscan import HDBSCAN
+from umap import UMAP
+
 from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM
 from torch import bfloat16
 import transformers
@@ -33,6 +36,20 @@ class LlamaAgent:
             max_new_tokens=config.LLAMA_MAX_NEW_TOKENS,
             repetition_penalty=1.1,
         )
+
+        self.umap_model = UMAP(
+            n_neighbors=15,
+            n_components=5,
+            min_dist=0.0,
+            metric="cosine",
+            random_state=42,
+        )
+        self.hdbscan_model = HDBSCAN(
+            metric="euclidean",
+            cluster_selection_method="eom",
+            prediction_data=True,
+        )
+
         # Load prompts from files
         self._system_prompt = self._load_prompt_from_file(
             "prompts/llama2_system_prompt.txt"
@@ -47,7 +64,9 @@ class LlamaAgent:
         # Set up llama2's prompt
         self.prompt = self._system_prompt + self._example_prompt + self._main_prompt
 
-        self.llama2 = TextGeneration(self.generator, prompt=self.prompt)
+        self.llama2 = TextGeneration(
+            self.generator, prompt=self.prompt, doc_length=100, tokenizer=self.tokenizer
+        )
 
     def _load_prompt_from_file(self, filename: str) -> str:
         """Loads a prompt from a plaintext file."""
@@ -57,3 +76,29 @@ class LlamaAgent:
         except FileNotFoundError as e:
             print(f"Error: Prompt file '{filename}' not found.")
             raise e
+
+    def reduce_embeddings(
+        self, np_embeddings, neighbors=15, components=2, min_dist=0.0
+    ):
+        # Reduce the embeddings for visualization
+        reduced_embeddings = UMAP(
+            n_neighbors=neighbors,
+            n_components=components,
+            min_dist=min_dist,
+            metric="cosine",
+            random_state=42,
+        ).fit_transform(np_embeddings)
+
+        return reduced_embeddings
+
+    def parse_labels(self, topics: List[int]):
+        llama2_labels = [
+            label[0][0].split("\n")[0]  # Get first line of the label
+            for label in topics.get("Llama2", {}).values()
+            if label
+            and isinstance(label, list)
+            and label[0]
+            and isinstance(label[0], tuple)
+            and label[0][0].strip()
+        ]
+        return llama2_labels
