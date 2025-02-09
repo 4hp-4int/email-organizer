@@ -12,7 +12,9 @@ config = Config()
 
 
 class LlamaAgent:
-    def __init__(self, model_id="meta-llama/Llama-2-7b-chat-hf"):
+    def __init__(
+        self, model_path: str = None, model_id="meta-llama/Llama-2-7b-chat-hf"
+    ):
         self.model_id = model_id
         self.bnb_config = transformers.BitsAndBytesConfig(
             load_in_4bit=True,
@@ -40,7 +42,7 @@ class LlamaAgent:
         self.umap_model = UMAP(
             n_neighbors=15,
             n_components=5,
-            min_dist=0.0,
+            min_dist=0.1,
             metric="cosine",
             random_state=42,
         )
@@ -48,6 +50,7 @@ class LlamaAgent:
             metric="euclidean",
             cluster_selection_method="eom",
             prediction_data=True,
+            min_cluster_size=10,
         )
 
         # Load prompts from files
@@ -91,10 +94,11 @@ class LlamaAgent:
 
         return reduced_embeddings
 
-    def parse_labels(self, topics: List[int]):
+    @classmethod
+    def parse_labels(cls, topics: List[int]):
         llama2_labels = [
             label[0][0].split("\n")[0]  # Get first line of the label
-            for label in topics.get("Llama2", {}).values()
+            for label in topics.values()
             if label
             and isinstance(label, list)
             and label[0]

@@ -5,6 +5,11 @@ I have a topic that contains the following emails:
 
 The topic is described by the following keywords: 'bills, statements, financial, report, payment, credit card, electricity, due, transactions, spending'.
 
-Based on the information about the emails above, please create a short label for this topic. Make sure you only return the label and nothing more.
+Generate a concise and specific label for this topic in **2-5 words**. The label must accurately represent the documents and keywords.
 
+❌ Do **not** add any extra words.  
+❌ Do **not** explain your choice.  
+❌ If the topic is unclear, return **only** 'XXX'.  
+
+Only return the label. Nothing more.
 [/INST]

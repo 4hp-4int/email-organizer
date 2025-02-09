@@ -22,6 +22,7 @@ class Config:
 
     ENCRYPTION_KEY = os.environ["ENCRYPTION_KEY"]
     MODEL = "all-MiniLm-L6-V2"
+    EMBEDDING_MODEL = MODEL
     LLAMA2 = "Llama2"
 
     HF_TOKEN = os.environ["HF_TOKEN"]

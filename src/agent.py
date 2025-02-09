@@ -275,7 +275,11 @@ class EmailOrganizerAgent:
             else:
                 break
 
-        return {folder.display_name: folder.id for folder in mail_folders}
+        return {
+            folder.display_name: folder.id
+            for folder in mail_folders
+            if "Junk" not in folder.display_name  # Exclude default outlook junk folder
+        }
 
     async def categorize_emails(
         self,

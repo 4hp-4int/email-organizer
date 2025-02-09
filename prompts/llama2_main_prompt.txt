@@ -1,8 +1,14 @@
 [INST]
-I have a topic that contains the following documents:
+I have a topic consisting of the following documents:
 [DOCUMENTS]
 
 The topic is described by the following keywords: '[KEYWORDS]'.
 
-Based on the information about the topic above, please create a short label of this topic. Make sure to only return the label and nothing more.
+Generate a concise and specific label for this topic in **2-5 words**. The label must accurately represent the documents and keywords.
+
+❌ Do **not** add any extra words.  
+❌ Do **not** explain your choice.  
+❌ If the topic is unclear, return **only** 'XXX'.  
+
+Only return the label. Nothing more.
 [/INST]
