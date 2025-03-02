@@ -5,11 +5,13 @@ I have a topic that contains the following emails:
 
 The topic is described by the following keywords: 'bills, statements, financial, report, payment, credit card, electricity, due, transactions, spending'.
 
-Generate a concise and specific label for this topic in **2-5 words**. The label must accurately represent the documents and keywords.
+Generate a concise and specific label for this topic in **2-5 words**. The label must accurately represent the documents and keywords. The ultimate goal is to produce labels which result in an easy to review and organized email inbox.
 
-❌ Do **not** add any extra words.  
-❌ Do **not** explain your choice.  
-❌ If the topic is unclear, return **only** 'XXX'.  
+Strictly follow these rules:
+1. Your response must **only contain the label** (2-5 words).  
+2. Do **not** include explanations, confirmations, or extra phrases like "Sure! Based on the information provided...".  
+3. If the topic is unclear, return **only** 'Requires Review'.    
+4. Maintain professional, contextually accurate labels. 
 
 Only return the label. Nothing more.
 [/INST]

@@ -1,0 +1,29 @@
+{
+    "model_name": "llama2Voyage3232205",
+    "use_llama2": true,
+    "nr_topics": null,
+    "min_topic_size": 10,
+    "umap_params": {
+        "n_neighbors": 50,
+        "n_components": 10,
+        "min_dist": 0.1,
+        "metric": "cosine"
+    },
+    "hdbscan_params": {
+        "metric": "euclidean",
+        "cluster_selection_method": "eom",
+        "prediction_data": true,
+        "min_cluster_size": 42
+    },
+    "voyage_model_name": "voyage-3",
+    "training_limit": 5000,
+    "zeroshot_topic_list": [
+        "Credit Reporting",
+        "Delivery Notifications",
+        "Retail Promotions",
+        "Basketball",
+        "Video Games",
+        "Online Shopping",
+        "Social Media"
+    ]
+}

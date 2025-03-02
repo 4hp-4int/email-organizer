@@ -17,6 +17,7 @@ class Config:
     EMAIL_DATA_DATABASE = "email_organizer"
     EMAIL_DATA_COLLECTION = "emails_v2"
     EMAIL_RUN_LOG_COLLECTION = "email_run_log"
+    EMAIL_SUPERVISED_TRAINING_COLLECTION = "email_supervised_training"
 
     EMBEDDING_FORMAT_STRING = "Subject: {subject}\n\nBody: {body}"
 

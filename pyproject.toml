@@ -31,10 +31,14 @@ pydantic = "^2.10.6"
 protobuf = "^5.29.3"
 safetensors = "^0.5.2"
 datasets = "^3.2.0"
+jupyterlab = "^4.3.5"
+voyageai = "^0.3.2"
 
 
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"
+flake8 = "^7.1.2"
+pylint = "^3.3.4"
 
 [build-system]
 requires = ["poetry-core"]

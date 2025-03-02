@@ -8,7 +8,7 @@ import pytz
 
 from azure.identity import ClientSecretCredential
 from msgraph import GraphServiceClient
-from msgraph.generated.models.o_data_errors.o_data_error import ODataError
+from msgraph.generated.models.o_data_errors.o_data_error import ODataError, APIError
 from msgraph.generated.models.message import Message
 from msgraph.generated.users.users_request_builder import UsersRequestBuilder
 from msgraph.generated.users.item.messages.item.move.move_post_request_body import (
@@ -17,6 +17,9 @@ from msgraph.generated.users.item.messages.item.move.move_post_request_body impo
 from pymongo import InsertOne
 
 
+from msgraph.generated.users.item.mail_folders.mail_folders_request_builder import (
+    MailFoldersRequestBuilder,
+)
 from msgraph.generated.users.item.messages.messages_request_builder import (
     MessagesRequestBuilder,
 )
@@ -43,6 +46,7 @@ class EmailMessage:
     received_date: date
     embeddings: list = field(default_factory=list)
     embedding_text: str = field(default_factory=str)
+    label: str = field(default_factory=str)
 
 
 class EmailOrganizerAgent:
@@ -121,6 +125,42 @@ class EmailOrganizerAgent:
         cleaned_text = " ".join(filtered_words)
         return cleaned_text
 
+    def create_email_message(self, message: Message) -> EmailMessage:
+        """
+        Creates an EmailMessage object from a raw message retrieved
+        via the Microsoft Graph API.
+
+        Args:
+            message: A Message object from the Graph API.
+
+        Returns:
+            An EmailMessage object with encrypted subject, body, sender,
+            and associated embeddings.
+        """
+        # Preprocess the email content for embedding
+        try:
+            email_content = self.preprocess_function(message)
+        except Exception as e:
+            logger.exception(f"Failed to preprocess email: {e}")
+            raise e
+
+        # Generate embeddings for the email content
+        email_embeddings = self.model.encode(email_content, show_progress_bar=False)
+
+        # Create the EmailMessage object
+        email_msg = EmailMessage(
+            subject=self._encrypt_message(message.subject),
+            body=self._encrypt_message(message.body.content),
+            sender=self._encrypt_message(message.sender.email_address.address),
+            importance=message.importance,
+            conversation_id=message.conversation_id,
+            received_date=message.received_date_time,
+            message_id=message.internet_message_id,
+            embeddings=email_embeddings.tolist(),
+            embedding_text=self._encrypt_message(email_content),
+        )
+        return email_msg
+
     async def get_inbox(self, user_id: str):
         """
         Retrieve emails from the user's inbox.
@@ -143,30 +183,8 @@ class EmailOrganizerAgent:
 
             for message in messages.value:
 
-                # Preprocess the email content
-                try:
-                    email_content = self.preprocess_function(message)
-                except KeyError:
-                    logger.exception("Failed to process email")
-                    continue
-
-                # Generate embeddings
-                email_embeddings = self.model.encode(
-                    email_content, show_progress_bar=False
-                )
-                email = EmailMessage(
-                    subject=self._encrypt_message(message.subject),
-                    body=self._encrypt_message(message.body.content),
-                    sender=self._encrypt_message(message.sender.email_address.address),
-                    importance=message.importance,
-                    conversation_id=message.conversation_id,
-                    received_date=message.received_date_time,
-                    message_id=message.internet_message_id,
-                    embeddings=email_embeddings.tolist(),
-                    embedding_text=self._encrypt_message(email_content),
-                )
+                email = self.create_email_message(message)
                 yield email
-
             # Check if there are more pages
             if messages.odata_next_link:
                 messages = (
@@ -195,7 +213,8 @@ class EmailOrganizerAgent:
         # Query parameters to filter unread messages from today
 
         query_params = MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters(
-            filter=f"isRead eq false and receivedDateTime ge {today}",
+            # filter=f"isRead eq false and receivedDateTime ge {today}",
+            filter=f"isRead eq false",
             top=100,
             orderby="receivedDateTime desc",
             select="from,isRead,receivedDateTime,subject,body,id,parentFolderId",
@@ -210,6 +229,9 @@ class EmailOrganizerAgent:
                 ).messages.get(request_configuration=request_configuration)
 
                 todays_emails.extend(messages.value)
+
+                if len(todays_emails) >= 100:
+                    break
 
                 # Check if there are more pages
                 if messages.odata_next_link:
@@ -238,7 +260,6 @@ class EmailOrganizerAgent:
             MailFolder(
                 display_name=label,
                 is_hidden=False,
-                parent_folder_id="inbox",
             )
             for label in topics
         ]
@@ -246,40 +267,44 @@ class EmailOrganizerAgent:
 
             # Create the folder or skip if it already exists
             try:
-                await self.user_client.users.by_user_id(user_id).mail_folders.post(
+                await self.user_client.users.by_user_id(
+                    user_id
+                ).mail_folders.by_mail_folder_id(
+                    "inbox"  # This needs to be grabbed from the api.
+                ).child_folders.post(
                     folder
                 )
-            except ODataError as e:
+            except (ODataError, APIError) as e:
                 logger.exception(
                     f"Failed to create folder {folder.display_name} - error: {e}"
                 )
                 continue
+
+        return True
 
     async def get_folder_destination_ids(self, user_id: str):
         """
         Retrieve the destination folder IDs for the user's inbox.
         """
         mail_folders = list()
-        folders = await self.user_client.users.by_user_id(user_id).mail_folders.get()
 
-        while True:
-            # Check if there are more pages
-            if folders.odata_next_link:
-                logger.info("Fetching more folders.")
-                folders = (
-                    await self.user_client.users.by_user_id(user_id)
-                    .mail_folders.with_url(folders.odata_next_link)
-                    .get()
-                )
-                mail_folders.extend(folders.value)
-            else:
-                break
+        # Query parameters to filter mail folders
+        query_params = (
+            MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters(
+                top=100, expand=["childFolders"]
+            )
+        )
+        request_configuration = RequestConfiguration(query_parameters=query_params)
 
-        return {
-            folder.display_name: folder.id
-            for folder in mail_folders
-            if "Junk" not in folder.display_name  # Exclude default outlook junk folder
-        }
+        folders = await self.user_client.users.by_user_id(user_id).mail_folders.get(
+            request_configuration=request_configuration
+        )
+        for mail_folder in folders.value:
+            if mail_folder.child_folders:
+                mail_folders.extend(mail_folder.child_folders)
+
+        mail_folders.extend(folders.value)
+        return {folder.display_name: folder.id for folder in mail_folders}
 
     async def categorize_emails(
         self,
@@ -294,7 +319,6 @@ class EmailOrganizerAgent:
         for message, label in messages_labels:
             # Skip if the label is "unknown"
             if label == "error":
-                logger.info("OKAY")
                 continue
 
             # Skip if the email is already in the correct folder

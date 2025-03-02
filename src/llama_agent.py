@@ -39,20 +39,6 @@ class LlamaAgent:
             repetition_penalty=1.1,
         )
 
-        self.umap_model = UMAP(
-            n_neighbors=15,
-            n_components=5,
-            min_dist=0.1,
-            metric="cosine",
-            random_state=42,
-        )
-        self.hdbscan_model = HDBSCAN(
-            metric="euclidean",
-            cluster_selection_method="eom",
-            prediction_data=True,
-            min_cluster_size=10,
-        )
-
         # Load prompts from files
         self._system_prompt = self._load_prompt_from_file(
             "prompts/llama2_system_prompt.txt"
