@@ -214,7 +214,7 @@ class EmailOrganizerAgent:
 
         query_params = MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters(
             # filter=f"isRead eq false and receivedDateTime ge {today}",
-            filter=f"isRead eq false",
+            filter=f"",
             top=100,
             orderby="receivedDateTime desc",
             select="from,isRead,receivedDateTime,subject,body,id,parentFolderId",
@@ -283,42 +283,49 @@ class EmailOrganizerAgent:
         return True
 
     async def get_folder_destination_ids(self, user_id: str):
-        """
-        Retrieve the destination folder IDs for the user's inbox.
-        """
-        mail_folders = list()
-
-        # Query parameters to filter mail folders
         query_params = (
             MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters(
-                top=100, expand=["childFolders"]
+                top=1000, expand=["childFolders"]
             )
         )
         request_configuration = RequestConfiguration(query_parameters=query_params)
 
-        folders = await self.user_client.users.by_user_id(user_id).mail_folders.get(
-            request_configuration=request_configuration
+        # This call fetches *Inbox*, then child_folders of Inbox, in one request
+        inbox_child_folders_response = (
+            await (
+                self.user_client.users.by_user_id(user_id)
+                .mail_folders
+                # "Inbox" is the folder ID or well-known name
+                .by_mail_folder_id("Inbox")
+                .child_folders.get(request_configuration=request_configuration)
+            )
         )
-        for mail_folder in folders.value:
-            if mail_folder.child_folders:
-                mail_folders.extend(mail_folder.child_folders)
 
-        mail_folders.extend(folders.value)
-        return {folder.display_name: folder.id for folder in mail_folders}
+        mail_folders = {}
+        for folder in inbox_child_folders_response.value:
+            mail_folders[folder.display_name] = folder.id
+
+        return mail_folders
 
     async def categorize_emails(
         self,
         user_id: str,
-        messages_labels: tuple[Message, str],
+        messages_labels: tuple[Message, str, int],
         folder_destination_ids: dict[str, str],
     ) -> List[dict[str, str]]:
         """
         Categorize emails based on the provided labels.
         """
         operation_log = list()
-        for message, label in messages_labels:
+        for message, label, prob in messages_labels:
             # Skip if the label is "unknown"
-            if label == "error":
+            if label == "Misc. / Outliers / Marketing":
+                continue
+
+            if prob < config.MIN_PROBABILITY:
+                logger.debug(
+                    f"Skipping email with low probability - {message.subject} - {label}"
+                )
                 continue
 
             # Skip if the email is already in the correct folder

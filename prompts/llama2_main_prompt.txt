@@ -12,5 +12,7 @@ Strictly follow these rules:
 3. If the topic is unclear, return **only** 'Requires Review'.    
 4. Maintain professional, contextually accurate labels.
 
-Only return the label. Nothing more.
+Based on the information above, extract a short topic label in the following format:
+topic: <topic label>
+
 [/INST]

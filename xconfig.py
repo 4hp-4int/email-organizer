@@ -31,6 +31,8 @@ class Config:
     SPACY_LIBRARY = "en_core_web_sm"
 
     TOPIC_LABELS = topic_labels
+
+    MIN_PROBABILITY = 0.52
     LLAMA_MAX_NEW_TOKENS = 300
 
     @property
