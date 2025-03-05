@@ -63,3 +63,11 @@ async def review_categorize_todays_email(
                 logger.error("Failed to store run results to database")
             else:
                 logger.info("Successfully stored run results to database")
+
+    if dry_run:
+        for email, label, prob in emails_labels:
+            logger.info(
+                f"Email: {email.subject} - "
+                f"Predicted Label: {label} - "
+                f"Probability: {prob}"
+            )

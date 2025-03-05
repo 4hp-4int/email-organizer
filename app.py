@@ -10,8 +10,8 @@ app = typer.Typer(help="Email Organizer CLI")
 # Attach each command to the `app`:
 app.command(name="collect_and_store")(collect_and_store_email)
 app.command(name="create_inbox_folders")(create_inbox_folders)
-app.command(name="review_and_categorize")(review_categorize_todays_email)
-app.command(name="train_classifier_model_v2")(train_topic_model)
+app.command(name="organize")(review_categorize_todays_email)
+app.command(name="train_topic_model")(train_topic_model)
 
 if __name__ == "__main__":
     app()
