@@ -1,6 +1,8 @@
 # topic_model_factory.py
 import json
 from bertopic import BERTopic
+from bertopic.representation import LlamaCPP
+from llama_cpp import Llama
 from umap import UMAP
 from hdbscan import HDBSCAN
 from loguru import logger
@@ -36,10 +38,15 @@ class TopicModelFactory:
                 model_name=self.cfg["voyage_model_name"],
             )
 
-        rep_model = None
-        if self.cfg.get("use_llama2"):
-            llama_agent = LlamaAgent()
-            rep_model = {"Llama2": llama_agent.llama2}
+        representation_model = None
+        if self.cfg.get("representation_model"):
+            llm = Llama(
+                model_path=self.cfg["representation_model"]["model_path"],
+                n_gpu_layers=self.cfg["representation_model"]["n_gpu_layers"],
+                n_ctx=self.cfg["representation_model"]["n_ctx"],
+                stop=self.cfg["representation_model"]["stop"],
+            )
+            representation_model = LlamaCPP(llm, prompt=self.app_config.PROMPT)
 
         umap_model = UMAP(**self.cfg.get("umap_params", {}))
         hdbscan_model = HDBSCAN(**self.cfg.get("hdbscan_params", {}))
@@ -52,7 +59,7 @@ class TopicModelFactory:
             embedding_model=embedding_model,
             umap_model=umap_model,
             hdbscan_model=hdbscan_model,
-            representation_model=rep_model,
+            representation_model=representation_model,
             zeroshot_topic_list=self.cfg.get("zeroshot_topic_list", []),
         )
 
@@ -64,9 +71,21 @@ class TopicModelFactory:
         and optionally re-fit it on more data.
         """
         model_path = self.cfg["model_name"]
-
         logger.info(f"Loading existing BERTopic model from: {model_path}")
+
         # If you want the same embedder or Llama2 representation, pass them in:
         embedding_model = VoyageEmbedder(voyage_client, self.cfg["voyage_model_name"])
         loaded_model = BERTopic.load(model_path, embedding_model=embedding_model)
+
+        # Load the representation model if retraining
+        if self.cfg.get("representation_model"):
+            llm = Llama(
+                model_path=self.cfg["representation_model"]["model_path"],
+                n_gpu_layers=self.cfg["representation_model"]["n_gpu_layers"],
+                n_ctx=self.cfg["representation_model"]["n_ctx"],
+                stop=self.cfg["representation_model"]["stop"],
+            )
+            representation_model = LlamaCPP(llm)
+            loaded_model.representation_model = representation_model
+
         return loaded_model

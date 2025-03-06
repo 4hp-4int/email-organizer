@@ -5,7 +5,6 @@ from loguru import logger
 from voyageai import Client
 
 from src.agent import EmailOrganizerAgent
-from src.llama_agent import LlamaAgent
 from src.topic_model_factory import TopicModelFactory
 from xconfig import Config
 from pymongo import MongoClient
@@ -50,21 +49,19 @@ def train_topic_model(
 
     # Fit the model
     logger.info("Fitting BERTopic model with loaded config")
-    topics, probs = topic_model.fit_transform(dataset["text"])
+    if retrain:
+        topics, probs = topic_model.partial_fit(dataset["text"])
 
-    # Optionally handle Llama2-based labels
-    if factory.cfg.get("use_llama2"):
-        llama_agent = LlamaAgent()
-        llama2_labels = llama_agent.parse_labels(
-            topic_model.get_topics(full=True)["Llama2"]
-        )
-        logger.info(llama2_labels)
-        # You could do something like:
-        # topic_model.set_topic_labels(llama2_labels)
+    else:
+        topics, probs = topic_model.fit_transform(dataset["text"])
+
+    if factory.cfg.get("representation_model"):
+        print(topic_model.get_topic_info(full=True))
 
     # Save the model
     model_path = factory.cfg["model_name"]
     topic_model.save(model_path, serialization="safetensors", save_ctfidf=True)
+
     with open(f"{model_path}/rep_docs.pickle", "wb") as handle:
         pickle.dump(
             topic_model.representative_docs_, handle, protocol=pickle.HIGHEST_PROTOCOL

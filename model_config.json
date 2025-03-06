@@ -1,8 +1,14 @@
 {
-    "model_name": "ll2V_DS-EO1a",
+    "model_name": "ll2V_DS-EO1-Qwen",
     "use_llama2": true,
     "nr_topics": null,
     "min_topic_size": 15,
+    "representation_model": {
+        "model_path": "qwen2.5-7b-instruct-q2_k.gguf",
+        "n_gpu_layers": -1,
+        "n_ctx": 8192,
+        "stop": "Q:"
+    },
     "umap_params": {
         "n_neighbors": 55,
         "n_components": 10,

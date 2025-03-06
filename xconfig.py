@@ -35,6 +35,23 @@ class Config:
     MIN_PROBABILITY = 0.52
     LLAMA_MAX_NEW_TOKENS = 300
 
+    PROMPT = """
+        <|im_start|>systemYou are an expert topic classifier that assigns precise and concise labels to topics based on provided documents and keywords. The ultimate goal is to produce labels which result in an easy to review and organized email inbox.
+        Strictly follow these rules:
+        1. Your response must **only contain the label** (2-5 words).  
+        2. Do **not** include explanations, confirmations, or extra phrases like "Sure! Based on the information provided...".  
+        3. If the topic is unclear, return **only** 'Requires Review'.    
+        4. Maintain professional, contextually accurate labels.<|im_end|>
+        <|im_start|>user
+        I have a topic that contains the following documents: 
+        [DOCUMENTS]
+        The topic is described by the following keywords: [KEYWORDS]
+
+        Based on the information above, extract a short topic label in the following format:
+        topic: <topic label>
+        <|im_end|><|im_start|>assistant
+    """
+
     @property
     def connection_string(self) -> str:
         user = os.environ.get("DB_USER")
