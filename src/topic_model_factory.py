@@ -7,7 +7,6 @@ from umap import UMAP
 from hdbscan import HDBSCAN
 from loguru import logger
 
-from src.llama_agent import LlamaAgent
 from src.embedders import VoyageEmbedder
 from xconfig import Config
 
