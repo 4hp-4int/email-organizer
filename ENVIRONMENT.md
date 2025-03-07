@@ -162,34 +162,6 @@ If you’re using Poetry:
 ```bash
 poetry run python app.py collect_and_store
 ```
-
----
-
-# 8. Misc. Tips
-
-1. **Version control**: You frequently committed/pushed your changes:
-   ```bash
-   git add -u
-   git commit -am "Your commit message"
-   git push origin main
-   ```
-   You also worked on feature branches like `llama2-topic-modeling` and merged them into `main`.
-
-2. **Diagnostic Tools**:  
-   - `nvidia-smi` to check GPU usage  
-   - `nvcc --version` to ensure CUDA is installed  
-
-3. **Poetry debugging**:  
-   - If you break your environment, you removed and re-created it:
-     ```bash
-     poetry env remove <env-name>
-     poetry install
-     ```
-   - Sometimes you forced reinstall with:
-     ```bash
-     poetry add <package> --force
-     ```
-
 ---
 
 ## Putting It All Together
