@@ -1,5 +1,6 @@
 import typer
 import pickle
+from typing import Optional
 from datasets import Dataset
 from loguru import logger
 from voyageai import Client
@@ -21,10 +22,18 @@ def train_topic_model(
     retrain: bool = typer.Option(
         False, help="If True, loads and retrains existing model."
     ),
+    docs_pickle_path: Optional[str] = typer.Option(
+        None, help="Path to pickled documents list."
+    ),
+    embeddings_pickle_path: Optional[str] = typer.Option(
+        None, help="Path to pickled embeddings list."
+    ),
 ):
     """
     Train or retrain a topic classifier model from config.
     """
+    raw_doc_strings = []
+    doc_embeddings = []
     factory = TopicModelFactory(config_path)
     vo_client = Client()
 
@@ -33,19 +42,29 @@ def train_topic_model(
     else:
         topic_model = factory.load_existing_model(vo_client)
 
+    if docs_pickle_path:
+        logger.info("Loading documents and embeddings from provided pickle paths...")
+        with open(docs_pickle_path, "rb") as f_docs:
+            raw_doc_strings = pickle.load(f_docs)
+
+    if embeddings_pickle_path:
+        with open(embeddings_pickle_path, "rb") as f_embs:
+            doc_embeddings = pickle.load(f_embs)
+
     # Gather data
     email_agent = EmailOrganizerAgent(name="Aloyisius")
     training_limit = factory.cfg.get("training_limit", 5000)
     email_cursor = email_collection.find().limit(training_limit)
 
-    raw_doc_strings = []
-    for idx, email in enumerate(email_cursor, start=1):
-        if idx % 10 == 0:
-            logger.info(f"Processed {idx} emails for training")
-        doc_string = email_agent._decrypt_message(email.get("embedding_text"))
-        raw_doc_strings.append(doc_string)
+    # Grab docs from the database if no pickles provided
+    if not docs_pickle_path:
+        for idx, email in enumerate(email_cursor, start=1):
+            if idx % 10 == 0:
+                logger.info(f"Processed {idx} emails for training")
+            doc_string = email_agent._decrypt_message(email.get("embedding_text"))
+            raw_doc_strings.append(doc_string)
 
-    dataset = Dataset.from_dict({"text": raw_doc_strings})
+    dataset = Dataset.from_dict({"text": raw_doc_strings, "embedding": doc_embeddings})
 
     # Fit the model
     logger.info("Fitting BERTopic model with loaded config")
@@ -53,10 +72,15 @@ def train_topic_model(
         topics, probs = topic_model.partial_fit(dataset["text"])
 
     else:
-        topics, probs = topic_model.fit_transform(dataset["text"])
+        # Use stored training data
+        if docs_pickle_path and embeddings_pickle_path:
+            topics, probs = topic_model.fit_transform(
+                documents=dataset["text"], embeddings=doc_embeddings
+            )
+        else:
+            topics, probs = topic_model.fit_transform(dataset["text"])
 
-    if factory.cfg.get("representation_model"):
-        print(topic_model.get_topic_info(full=True))
+    print(topic_model.get_topic_info())
 
     # Save the model
     model_path = factory.cfg["model_name"]

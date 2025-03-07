@@ -48,6 +48,6 @@ class VoyageEmbedder(BaseEmbedder):
         logger.debug(f"Serializing Model Embeddings: {self.model_path}")
 
         with open(f"embeddings.pickle", "wb") as handle:
-            pickle.dump(numpy_embeddings, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            pickle.dump(all_embeddings, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         return numpy_embeddings

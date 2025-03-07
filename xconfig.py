@@ -43,7 +43,15 @@ class Config:
         3. If the topic is unclear, return **only** 'Requires Review'.    
         4. Maintain professional, contextually accurate labels.<|im_end|>
         <|im_start|>user
-        I have a topic that contains the following documents: 
+        Here's an Example: I have a topic that contains the following emails:
+        - Subject: Your January Financial Report - Body: View your detailed financial report for January. See your spending, savings, and investment performance.
+        - Subject: Bill Reminder - Electricity - Body: Your electricity bill is due on February 15th. Pay online or at any authorized payment center.
+        - Subject: Credit Card Statement Available - Body: Your latest credit card statement is now available online. Check your transactions and payment details.
+
+        The topic is described by the following keywords: 'bills, statements, financial, report, payment, credit card, electricity, due, transactions, spending'.
+
+        Generate a concise and specific label for this topic in **2-5 words**. The label must accurately represent the documents and keywords. The ultimate goal is to produce labels which result in an easy to review and organized email inbox.
+        I have a topic that contains the following emails: 
         [DOCUMENTS]
         The topic is described by the following keywords: [KEYWORDS]
 
