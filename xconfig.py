@@ -28,8 +28,6 @@ class Config:
 
     HF_TOKEN = os.environ["HF_TOKEN"]
 
-    SPACY_LIBRARY = "en_core_web_sm"
-
     TOPIC_LABELS = topic_labels
 
     MIN_PROBABILITY = 0.52

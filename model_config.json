@@ -1,35 +1,28 @@
 {
-    "model_name": "ll2V_DS-EO1-Qwenv4",
-    "use_llama2": true,
-    "nr_topics": null,
-    "min_topic_size": 8,
-    "representation_model": {
-        "model_path": "qwen2.5-7b-instruct-q2_k.gguf",
-        "n_gpu_layers": -1,
-        "n_ctx": 16000,
-        "stop": "Q:"
-    },
-    "umap_params": {
-        "n_neighbors": 50,
-        "n_components": 10,
-        "min_dist": 0.1,
-        "metric": "cosine"
-    },
-    "hdbscan_params": {
-        "metric": "euclidean",
-        "cluster_selection_method": "eom",
-        "prediction_data": true,
-        "min_cluster_size": 15
-    },
-    "voyage_model_name": "voyage-3",
-    "training_limit": 5000,
-    "zeroshot_topic_list": [
-        "Credit Reporting",
-        "Delivery Notifications",
-        "Retail Promotions",
-        "Basketball",
-        "Video Games",
-        "Online Shopping",
-        "Social Media"
-    ]
+  "model_name": "ao-vq-ds-1",
+  "voyage_model_name": "voyage-3-large",
+  "representation_model": {
+    "model_path": "/home/knf/Qwen2.5-14b-Instruct-1M-q8_0.gguf",
+    "n_gpu_layers": -1,
+    "n_ctx": 8192,
+    "stop": "Q:"
+  },
+  "nr_topics": 10,
+  "min_topic_size": 15,
+  "zeroshot_topic_list": [
+    "Finance",
+    "Technology",
+    "Health"
+  ],
+  "umap_params": {
+    "n_neighbors": 15,
+    "n_components": 5,
+    "min_dist": 0.0,
+    "spread": 1.0
+  },
+  "hdbscan_params": {
+    "min_cluster_size": 5,
+    "metric": "euclidean",
+    "cluster_selection_method": "eom"
+  }
 }

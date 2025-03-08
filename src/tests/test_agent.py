@@ -45,7 +45,6 @@ class TestEmailOrganizerAgent(unittest.TestCase):
     ):
         self.mock_config = MockConfig.return_value
         self.mock_config.ENCRYPTION_KEY = "test_key"
-        self.mock_config.SPACY_LIBRARY = "en_core_web_sm"
         self.mock_config.MODEL = "all-MiniLM-L6-v2"
         self.mock_config.AZURE_TENANT_ID = "tenant_id"
         self.mock_config.AZURE_CLIENT_ID = "client_id"

@@ -1,301 +1,236 @@
-Below is a suggested **README.md** reflecting the current state of the project and its files. Feel free to modify any section to fit your environment, deployment strategy, or specific instructions.
-
+---
+license: apache-2.0
+license_link: https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-1M/blob/main/LICENSE
+language:
+- en
+pipeline_tag: text-generation
+base_model: Qwen/Qwen2.5-14B
+tags:
+- chat
+library_name: transformers
 ---
 
-# Email Classification & Organization
+# Qwen2.5-14B-Instruct-1M
+<a href="https://chat.qwenlm.ai/" target="_blank" style="margin: 2px;">
+    <img alt="Chat" src="https://img.shields.io/badge/%F0%9F%92%9C%EF%B8%8F%20Qwen%20Chat%20-536af5" style="display: inline-block; vertical-align: middle;"/>
+</a>
 
-This repository contains a system for classifying and organizing emails using a **BERTopic** model (potentially enhanced with custom embeddings). It integrates with Microsoft Graph to read emails from a mailbox (e.g. Outlook/Office 365), automatically classify them into topics, and move them to corresponding folders.
+## Introduction
 
-## Table of Contents
+Qwen2.5-1M is the long-context version of the Qwen2.5 series models, supporting a context length of up to 1M tokens. Compared to the Qwen2.5 128K version, Qwen2.5-1M demonstrates significantly improved performance in handling long-context tasks while maintaining its capability in short tasks.
 
-1. [Overview](#overview)  
-2. [Key Features](#key-features)  
-3. [Project Structure](#project-structure)  
-4. [Setup & Installation](#setup--installation)  
-5. [Configuration](#configuration)  
-6. [Usage](#usage)  
-   - [1. Collect and Store Emails](#1-collect-and-store-emails)  
-   - [2. Train the Topic Model](#2-train-the-topic-model)  
-   - [3. Create Inbox Folders](#3-create-inbox-folders)  
-   - [4. Organize Emails](#4-organize-emails)  
-7. [Technical Details](#technical-details)  
-   - [Topic Modeling with BERTopic](#topic-modeling-with-bertopic)  
-   - [Embedding Models](#embedding-models)  
-   - [Microsoft Graph Integration](#microsoft-graph-integration)  
-   - [Data Storage](#data-storage)  
-8. [Credits & License](#credits--license)
+The model has the following features:
+- Type: Causal Language Models
+- Training Stage: Pretraining & Post-training
+- Architecture: transformers with RoPE, SwiGLU, RMSNorm, and Attention QKV bias
+- Number of Parameters: 14.7B
+- Number of Paramaters (Non-Embedding): 13.1B
+- Number of Layers: 48
+- Number of Attention Heads (GQA): 40 for Q and 8 for KV
+- Context Length: Full 1,010,000 tokens and generation 8192 tokens
+  - We recommend deploying with our custom vLLM, which introduces sparse attention and length extrapolation methods to ensure efficiency and accuracy for long-context tasks. For specific guidance, refer to [this section](#processing-ultra-long-texts).
+  - You can also use the previous framework that supports Qwen2.5 for inference, but accuracy degradation may occur for sequences exceeding 262,144 tokens.
 
----
+For more details, please refer to our [blog](https://qwenlm.github.io/blog/qwen2.5-1m/), [GitHub](https://github.com/QwenLM/Qwen2.5), [Technical Report](https://huggingface.co/papers/2501.15383), and [Documentation](https://qwen.readthedocs.io/en/latest/).
 
-## Overview
+## Requirements
 
-This project automates the process of **retrieving, classifying, and categorizing emails**. After emails are fetched from a mailbox, they are embedded and stored in MongoDB for analysis or future model training. A **BERTopic** model determines the most likely “topic” (e.g., Promotions, Orders, Finance, etc.), and the system then moves the email to a corresponding folder in Outlook.
+The code of Qwen2.5 has been in the latest Hugging face `transformers` and we advise you to use the latest version of `transformers`.
 
-### Workflow Summary
-
-1. **Collect Emails**: Pull emails from Outlook/Office 365 via Microsoft Graph.  
-2. **Store**: Embeddings and metadata are saved to a MongoDB collection.  
-3. **Train/Re-train**: Use the stored data to train or refine a BERTopic model.  
-4. **Create Folders**: Based on discovered or predefined topics, create matching folders in Outlook.  
-5. **Organize**: Classify new emails and move them into the relevant folder automatically.
-
----
-
-## Key Features
-
-- **Automated Email Retrieval**: Uses Microsoft Graph to fetch emails.  
-- **Topic Modeling**: Leverages [BERTopic](https://github.com/MaartenGr/BERTopic) for clustering/classification.  
-- **Custom Embeddings**: Integrates with:
-  - [Sentence Transformers](https://github.com/UKPLab/sentence-transformers)
-  - [Voyage AI](https://voyage.ml/) client for custom embeddings
-  - [LlamaCPP-based representation model](https://github.com/abetlen/llama-cpp-python) (optional)
-- **MongoDB Integration**: Persists email data and embeddings for analysis or retraining.  
-- **CLI Interface**: Built with [Typer](https://typer.tiangolo.com/) for easy command-line usage.
-
----
-
-## Project Structure
-
-Below is an overview of the key Python files:
-
+With `transformers<4.37.0`, you will encounter the following error:
 ```
-.
-├── app.py
-├── src
-│   ├── commands
-│   │   ├── collect_and_store.py
-│   │   ├── create_inbox_folders.py
-│   │   ├── review_and_categorize.py
-│   │   └── train_topic_model.py
-│   ├── agent.py
-│   ├── embedders.py
-│   ├── message.py
-│   ├── topic_labels.py
-│   ├── topic_model_factory.py
-│   └── util.py
-├── xconfig.py (not shown, but contains environment variable logic)
-└── ...
+KeyError: 'qwen2'
 ```
 
-**Main Files & Their Roles**:
+## Quickstart
 
-- **app.py**  
-  A CLI entry-point (Typer application). Exposes commands:
-  - `collect_and_store`
-  - `create_inbox_folders`
-  - `organize`
-  - `train_topic_model`
+Here provides a code snippet with `apply_chat_template` to show you how to load the tokenizer and model and how to generate contents.
 
-- **src/agent.py**  
-  The `EmailOrganizerAgent` class connects to Microsoft Graph, retrieves emails, preprocesses and encrypts them, and can move them between folders.
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
-- **src/commands/**  
-  - **collect_and_store.py**: Fetches emails from Outlook and stores them in MongoDB.  
-  - **create_inbox_folders.py**: Creates Outlook inbox subfolders based on discovered topics.  
-  - **review_and_categorize.py**: Pulls today’s (or unread) emails, classifies them, and moves them to the appropriate folder.  
-  - **train_topic_model.py**: Trains or retrains the BERTopic model based on data in the MongoDB collection or local pickles.
+model_name = "Qwen/Qwen2.5-14B-Instruct-1M"
 
-- **src/topic_model_factory.py**  
-  Builds a BERTopic instance with custom or default embeddings, UMAP/HDBSCAN parameters, and optional Llama-based representation.
+model = AutoModelForCausalLM.from_pretrained(
+    model_name,
+    torch_dtype="auto",
+    device_map="auto"
+)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-- **src/embedders.py**  
-  Defines custom embedding classes, e.g. `VoyageEmbedder`, suitable for plugging into BERTopic’s “backend” embeddings.
+prompt = "Give me a short introduction to large language model."
+messages = [
+    {"role": "system", "content": "You are Qwen, created by Alibaba Cloud. You are a helpful assistant."},
+    {"role": "user", "content": prompt}
+]
+text = tokenizer.apply_chat_template(
+    messages,
+    tokenize=False,
+    add_generation_prompt=True
+)
+model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
 
-- **src/util.py**  
-  General utility functions (async wrappers, HTML processing, chunking, etc.).
+generated_ids = model.generate(
+    **model_inputs,
+    max_new_tokens=512
+)
+generated_ids = [
+    output_ids[len(input_ids):] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
+]
 
-- **src/message.py**  
-  A dataclass for representing messages in a standardized format.
+response = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+```
 
-- **src/topic_labels.py**  
-  Example dictionaries for mapping numeric topic IDs to user-friendly strings.
+### Processing Ultra Long Texts
 
----
+To enhance processing accuracy and efficiency for long sequences, we have developed an advanced inference framework based on vLLM, incorporating sparse attention and length extrapolation. This approach significantly improves model generation performance for sequences exceeding 256K tokens and achieves a 3 to 7 times speedup for sequences up to 1M tokens.
 
-## Setup & Installation
+Here we provide step-by-step instructions for deploying the Qwen2.5-1M models with our framework.
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/<your_org>/email-classification.git
-   cd email-classification
-   ```
+#### 1. System Preparation
 
-2. **Create a virtual environment** (recommended):
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On macOS/Linux
-   # or venv\Scripts\activate on Windows
-   ```
+To achieve the best performance, we recommend using GPUs with Ampere or Hopper architecture, which support optimized kernels.
 
-3. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+Ensure your system meets the following requirements:
 
-4. **Set up environment variables**:  
-   This project uses `xconfig.py` (not shown here) to read your environment variables. Required variables might include:
-   - `AZURE_TENANT_ID`
-   - `AZURE_CLIENT_ID`
-   - `AZURE_CLIENT_SECRET`
-   - `AZURE_GRAPH_SCOPES`
-   - `MODEL` (e.g., `"all-MiniLM-L6-v2"` for sentence-transformers)
-   - `SPACY_LIBRARY` (e.g., `"en_core_web_sm"`)
-   - `ENCRYPTION_KEY` (for encrypting email content)
-   - `EMAIL_DATA_DATABASE` / `EMAIL_DATA_COLLECTION` / `EMAIL_RUN_LOG_COLLECTION`
-   - `connection_string` for MongoDB
-   - And any references for the `Voyage AI` client or Llama-based embeddings
+- **CUDA Version**: 12.1 or 12.3
+- **Python Version**: >=3.9 and <=3.12
 
-   You can set these in an `.env` file or in your shell.
+**VRAM Requirements:**
 
-5. **Install spaCy model** (if needed), e.g.:
-   ```bash
-   python -m spacy download en_core_web_sm
-   ```
+- For processing 1 million-token sequences:
+  - **Qwen2.5-7B-Instruct-1M**: At least 120GB VRAM (total across GPUs).
+  - **Qwen2.5-14B-Instruct-1M**: At least 320GB VRAM (total across GPUs).
 
----
+If your GPUs do not have sufficient VRAM, you can still use Qwen2.5-1M for shorter tasks.
 
-## Configuration
+#### 2. Install Dependencies
 
-The **topic model** is configured via a JSON file (default: `model_config.json`). Example fields could include:
+For now, you need to clone the vLLM repository from our custom branch and install it manually. We are working on getting our branch merged into the main vLLM project.
 
-```json
-{
-  "model_name": "models/my_bertopic_model",
-  "voyage_model_name": "voyage-3",
-  "representation_model": {
-    "model_path": "path/to/llama2.bin",
-    "n_gpu_layers": 32,
-    "n_ctx": 4096,
-    "stop": ["###"]
-  },
-  "umap_params": {
-    "n_neighbors": 15,
-    "n_components": 5,
-    "min_dist": 0.0,
-    "metric": "cosine"
-  },
-  "hdbscan_params": {
-    "min_cluster_size": 10,
-    "metric": "euclidean",
-    "cluster_selection_method": "eom"
-  },
-  "nr_topics": null,
-  "min_topic_size": 10,
-  "zeroshot_topic_list": [],
-  "training_limit": 5000
+```bash
+git clone -b dev/dual-chunk-attn git@github.com:QwenLM/vllm.git
+cd vllm
+pip install -e . -v
+```
+
+
+#### 3. Launch vLLM
+
+vLLM supports offline inference or launch an openai-like server.
+
+**Example of Offline Inference**
+
+```python
+from transformers import AutoTokenizer
+from vllm import LLM, SamplingParams
+
+# Initialize the tokenizer
+tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-14B-Instruct-1M")
+
+# Pass the default decoding hyperparameters of Qwen2.5-14B-Instruct
+# max_tokens is for the maximum length for generation.
+sampling_params = SamplingParams(temperature=0.7, top_p=0.8, repetition_penalty=1.05, max_tokens=512)
+
+# Input the model name or path. See below for parameter explanation (after the example of openai-like server).
+llm = LLM(model="Qwen/Qwen2.5-14B-Instruct-1M",
+    tensor_parallel_size=4,
+    max_model_len=1010000,
+    enable_chunked_prefill=True,
+    max_num_batched_tokens=131072,
+    enforce_eager=True,
+    # quantization="fp8", # Enabling FP8 quantization for model weights can reduce memory usage.
+)
+
+# Prepare your prompts
+prompt = "Tell me something about large language models."
+messages = [
+    {"role": "system", "content": "You are Qwen, created by Alibaba Cloud. You are a helpful assistant."},
+    {"role": "user", "content": prompt}
+]
+text = tokenizer.apply_chat_template(
+    messages,
+    tokenize=False,
+    add_generation_prompt=True
+)
+
+# generate outputs
+outputs = llm.generate([text], sampling_params)
+
+# Print the outputs.
+for output in outputs:
+    prompt = output.prompt
+    generated_text = output.outputs[0].text
+    print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
+```
+
+**Example of Openai-like Server**
+
+```bash
+vllm serve Qwen/Qwen2.5-14B-Instruct-1M \
+  --tensor-parallel-size 4 \
+  --max-model-len 1010000 \
+  --enable-chunked-prefill --max-num-batched-tokens 131072 \
+  --enforce-eager \
+  --max-num-seqs 1
+
+# --quantization fp8  # Enabling FP8 quantization for model weights can reduce memory usage.
+```
+
+Then you can use curl or python to interact with the deployed model.
+
+**Parameter Explanations:**
+
+- **`--tensor-parallel-size`**
+  - Set to the number of GPUs you are using. Max 4 GPUs for the 7B model, and 8 GPUs for the 14B model.
+  
+- **`--max-model-len`**
+  - Defines the maximum input sequence length. Reduce this value if you encounter Out of Memory issues.
+
+- **`--max-num-batched-tokens`**
+  - Sets the chunk size in Chunked Prefill. A smaller value reduces activation memory usage but may slow down inference. 
+  - Recommend 131072 for optimal performance.
+
+- **`--max-num-seqs`**
+  - Limits concurrent sequences processed. 
+
+You can also refer to our [Documentation](https://qwen.readthedocs.io/en/latest/deployment/vllm.html) for usage of vLLM.
+
+#### Troubleshooting:
+
+1. Encountering the error: "The model's max sequence length (xxxxx) is larger than the maximum number of tokens that can be stored in the KV cache."
+
+    The VRAM reserved for the KV cache is insufficient. Consider reducing the ``max_model_len`` or increasing the ``tensor_parallel_size``. Alternatively, you can reduce ``max_num_batched_tokens``, although this may significantly slow down inference.
+
+2. Encountering the error: "torch.OutOfMemoryError: CUDA out of memory."
+
+    The VRAM reserved for activation weights is insufficient. You can try setting ``gpu_memory_utilization`` to 0.85 or lower, but be aware that this might reduce the VRAM available for the KV cache.
+
+3. Encountering the error: "Input prompt (xxxxx tokens) + lookahead slots (0) is too long and exceeds the capacity of the block manager."
+
+    The input is too lengthy. Consider using a shorter sequence or increasing the ``max_model_len``.
+
+## Evaluation & Performance
+
+Detailed evaluation results are reported in this [📑 blog](https://qwenlm.github.io/blog/qwen2.5-1m/) and our [technical report](https://arxiv.org/abs/2501.15383).
+
+## Citation
+
+If you find our work helpful, feel free to give us a cite.
+
+```
+@misc{qwen2.5-1m,
+    title = {Qwen2.5-1M: Deploy Your Own Qwen with Context Length up to 1M Tokens},
+    url = {https://qwenlm.github.io/blog/qwen2.5-1m/},
+    author = {Qwen Team},
+    month = {January},
+    year = {2025}
+}
+
+@article{qwen2.5,
+      title={Qwen2.5-1M Technical Report}, 
+      author={An Yang and Bowen Yu and Chengyuan Li and Dayiheng Liu and Fei Huang and Haoyan Huang and Jiandong Jiang and Jianhong Tu and Jianwei Zhang and Jingren Zhou and Junyang Lin and Kai Dang and Kexin Yang and Le Yu and Mei Li and Minmin Sun and Qin Zhu and Rui Men and Tao He and Weijia Xu and Wenbiao Yin and Wenyuan Yu and Xiafei Qiu and Xingzhang Ren and Xinlong Yang and Yong Li and Zhiying Xu and Zipeng Zhang},
+      journal={arXiv preprint arXiv:2501.15383},
+      year={2025}
 }
 ```
-
-- **`model_name`**: Directory where the BERTopic model will be saved or loaded.  
-- **`voyage_model_name`**: If using Voyage AI, references the model name to fetch embeddings.  
-- **`representation_model`**: If using the Llama-based representation for topic labeling.  
-- **`umap_params`, `hdbscan_params`**: Parameters for the underlying dimensionality reduction and clustering.  
-- **`training_limit`**: Maximum emails to fetch from MongoDB for training.
-
----
-
-## Usage
-
-This project uses [Typer](https://typer.tiangolo.com/). You can run commands directly via `python app.py <command>`.
-
-### 1. Collect and Store Emails
-
-Fetches the user’s inbox emails from Outlook and stores them (with embeddings) in MongoDB:
-
-```bash
-python app.py collect-and-store --user-id "user@domain.com"
-```
-
-- **`--user-id`**: The mailbox user you want to retrieve emails from. (Default is set in the code.)
-
-### 2. Train the Topic Model
-
-Trains (or retrains) the BERTopic model from the emails that have been stored in MongoDB. You can optionally provide pickled documents/embeddings, or let the script pull from your DB:
-
-```bash
-python app.py train-topic-model \
-  --config-path "model_config.json" \
-  --retrain False \
-  --docs-pickle-path "docs.pickle" \
-  --embeddings-pickle-path "embeddings.pickle"
-```
-
-**Arguments**:
-- `--config-path`: Path to your JSON configuration for the model.  
-- `--retrain`: If `True`, loads an existing model from `model_name` and refits it.  
-- `--docs-pickle-path`: Optional, if you have pre-stored documents as a pickle file.  
-- `--embeddings-pickle-path`: Optional, if you have pre-stored embeddings as a pickle file.
-
-### 3. Create Inbox Folders
-
-Creates subfolders in your Outlook mailbox’s Inbox for each discovered topic in the loaded model:
-
-```bash
-python app.py create-inbox-folders \
-  --user-id "user@domain.com" \
-  --config-path "model_config.json"
-```
-
-### 4. Organize Emails
-
-Fetches today’s unread emails, infers their topics, and **moves** them to the appropriate folder (unless `--dry-run` is used):
-
-```bash
-python app.py organize \
-  --user-id "user@domain.com" \
-  --config-path "model_config.json" \
-  --dry-run False
-```
-
-- If `--dry-run` is `True`, it only **logs** what it would do, without moving emails.
-
----
-
-## Technical Details
-
-### Topic Modeling with BERTopic
-
-The system uses **BERTopic** to cluster emails by subject/body text, then optionally label them with a zero-shot or Llama-based approach. The pipeline is:
-
-1. Preprocessing via spaCy (removing stopwords, punctuation).  
-2. Vectorizing either with a local **Sentence Transformer** or **Voyage AI** embedder.  
-3. Dimensionality reduction via **UMAP** and clustering via **HDBSCAN**.  
-4. Optional re-labeling or zero-shot classification.
-
-### Embedding Models
-
-- **Sentence Transformers**  
-  Default approach using a model specified by `MODEL` environment variable.  
-- **VoyageEmbedder** (in `embedders.py`)  
-  Uses the Voyage AI client to embed text.  
-- **LlamaCPP**  
-  If specified, the model can also use Llama-based representation for interpretability or text-based topic labeling.
-
-### Microsoft Graph Integration (Sorry GMail'ers)
-
-`EmailOrganizerAgent` (in `agent.py`) handles:
-
-- **Authentication**: Uses `ClientSecretCredential` from Azure Identity.  
-- **Fetching**: Emails are retrieved via `GraphServiceClient`, optionally filtered (e.g., by `isRead == false`).  
-- **Moving Emails**: The `.move()` call moves an email to another folder.  
-
-### Data Storage
-
-- **MongoDB**  
-  - **Emails**: Embedded data, subject, body, etc., are encrypted and stored in a single collection.  
-  - **Log**: The script can store “operation logs” (what got moved, etc.) in another collection.
-
----
-
-## Credits & License
-
-- [Typer](https://typer.tiangolo.com/) – Command-line interface.  
-- [BERTopic](https://github.com/MaartenGr/BERTopic) – Topic modeling library.  
-- [Voyage AI](https://voyage.ml/) – Optional embedding provider.  
-- [Microsoft Graph Python SDK](https://github.com/microsoftgraph/msgraph-sdk-python) – For mailbox operations.  
-
-You may distribute or modify under your chosen license. Please see `LICENSE` (if present) or contact the repository owner for details.
-
----  
-
-**Enjoy automated email organization!** If you have any questions or encounter issues, feel free to open an issue or reach out.

@@ -84,7 +84,7 @@ class TopicModelFactory:
                 n_ctx=self.cfg["representation_model"]["n_ctx"],
                 stop=self.cfg["representation_model"]["stop"],
             )
-            representation_model = LlamaCPP(llm)
+            representation_model = LlamaCPP(llm, prompt=self.app_config.PROMPT)
             loaded_model.representation_model = representation_model
 
         return loaded_model

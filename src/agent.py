@@ -57,7 +57,6 @@ class EmailOrganizerAgent:
     def __init__(self, name: str):
         super().__init__()
         self.cipher_suite = Fernet(config.ENCRYPTION_KEY)
-        self.nlp = spacy.load(config.SPACY_LIBRARY)
         self.model = SentenceTransformer(config.MODEL, device="cuda")
 
         tenant_id = config.AZURE_TENANT_ID
@@ -116,14 +115,7 @@ class EmailOrganizerAgent:
             .replace("}", "}}"),  ## this is for emails that have curly braces in them
         )
 
-        # Filter out stop words and punctuation
-        doc = self.nlp(combined_text)
-        filtered_words = [
-            token.text for token in doc if not token.is_stop and not token.is_punct
-        ]
-        # Join the filtered words back into a string
-        cleaned_text = " ".join(filtered_words)
-        return cleaned_text
+        return combined_text
 
     def create_email_message(self, message: Message) -> EmailMessage:
         """
