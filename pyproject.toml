@@ -18,4 +18,5 @@ dependencies = [
     "sentence-transformers>=3.4.1",
     "typer>=0.15.2",
     "voyageai>=0.3.2",
+    "llama-cpp-python>=0.3.7",
 ]

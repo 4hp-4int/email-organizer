@@ -666,6 +666,15 @@ wheels = [
 ]
 
 [[package]]
+name = "diskcache"
+version = "5.6.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3f/21/1c1ffc1a039ddcc459db43cc108658f32c57d271d7289a2794e401d0fdb6/diskcache-5.6.3.tar.gz", hash = "sha256:2c3a3fa2743d8535d832ec61c2054a1641f41775aa7c556758a109941e33e4fc", size = 67916 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3f/27/4570e78fc0bf5ea0ca45eb1de3818a23787af9b390c0b0a0033a1b8236f9/diskcache-5.6.3-py3-none-any.whl", hash = "sha256:5e31b2d5fbad117cc363ebaf6b689474db18a1f6438bc82358b024abd4c2ca19", size = 45550 },
+]
+
+[[package]]
 name = "dnspython"
 version = "2.7.0"
 source = { registry = "https://pypi.org/simple" }
@@ -684,6 +693,7 @@ dependencies = [
     { name = "gguf" },
     { name = "huggingface-hub", extra = ["cli"] },
     { name = "jupyterlab" },
+    { name = "llama-cpp-python" },
     { name = "loguru" },
     { name = "msgraph-sdk" },
     { name = "numba", version = "0.60.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
@@ -702,6 +712,7 @@ requires-dist = [
     { name = "gguf", specifier = ">=0.14.0" },
     { name = "huggingface-hub", extras = ["cli"], specifier = ">=0.29.2" },
     { name = "jupyterlab", specifier = ">=4.3.5" },
+    { name = "llama-cpp-python", specifier = ">=0.3.7" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "msgraph-sdk", specifier = ">=1.23.0" },
     { name = "numba", specifier = ">=0.56.4" },
@@ -1401,6 +1412,18 @@ sdist = { url = "https://files.pythonhosted.org/packages/0a/c9/a883ce65eb27905ce
 wheels = [
     { url = "https://files.pythonhosted.org/packages/54/09/2032e7d15c544a0e3cd831c51d77a8ca57f7555b2e1b2922142eddb02a84/jupyterlab_server-2.27.3-py3-none-any.whl", hash = "sha256:e697488f66c3db49df675158a77b3b017520d772c6e1548c7d9bcc5df7944ee4", size = 59700 },
 ]
+
+[[package]]
+name = "llama-cpp-python"
+version = "0.3.7"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "diskcache" },
+    { name = "jinja2" },
+    { name = "numpy" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a6/38/7a47b1fb1d83eaddd86ca8ddaf20f141cbc019faf7b425283d8e5ef710e5/llama_cpp_python-0.3.7.tar.gz", hash = "sha256:0566a0dcc0f38005c4093309a87f67c2452449522e3e17e15cd735a62957894c", size = 66715891 }
 
 [[package]]
 name = "llvmlite"
