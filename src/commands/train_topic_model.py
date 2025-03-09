@@ -49,7 +49,9 @@ def train_topic_model(
 
     if embeddings_pickle_path:
         with open(embeddings_pickle_path, "rb") as f_embs:
-            doc_embeddings = pickle.load(f_embs)
+            import numpy as np
+
+            doc_embeddings = np.array(pickle.load(f_embs))
 
     # Gather data
     email_agent = EmailOrganizerAgent(name="Aloyisius")
@@ -73,7 +75,7 @@ def train_topic_model(
 
     else:
         # Use stored training data
-        if docs_pickle_path and embeddings_pickle_path:
+        if embeddings_pickle_path:
             topics, probs = topic_model.fit_transform(
                 documents=dataset["text"], embeddings=doc_embeddings
             )

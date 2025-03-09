@@ -1,14 +1,14 @@
 {
-  "model_name": "ao-vq-ds-1",
+  "model_name": "ao-vq-ds-1a",
   "voyage_model_name": "voyage-3",
   "training_limit": 5000,
   "representation_model": {
     "model_path": "/home/knf/code/models/Qwen2.5-7b-Instruct-1M-q2_k.gguf",
     "n_gpu_layers": 50,
-    "n_ctx": 16000,
+    "n_ctx": 32000,
     "stop": "Q:"
   },
-  "nr_topics": 30,
+  "nr_topics": 50,
   "min_topic_size": 15,
   "zeroshot_topic_list": [],
   "umap_params": {

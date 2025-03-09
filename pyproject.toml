@@ -26,4 +26,5 @@ dependencies = [
 dev = [
     "black>=25.1.0",
     "ipython>=8.18.1",
+    "jupyterlab>=4.3.5",
 ]

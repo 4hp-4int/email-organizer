@@ -40,7 +40,7 @@ class Config:
     Strictly follow these rules:
     1. Your response must **only contain the label** (2-5 words).  
     2. Do **not** include explanations, confirmations, or extra phrases like "Sure! Based on the information provided...".  
-    3. If the topic is unclear, return **only** 'Requires Review'.    
+    3. If the topic is unclear, return a topic label which more generally encompasses the topic.  
     4. Maintain professional, contextually accurate labels.
     <|im_end|><|im_start|>user
     Here's an Example: I have a topic that contains the following emails:
