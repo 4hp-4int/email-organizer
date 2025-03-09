@@ -1,9 +1,9 @@
 {
   "model_name": "ao-vq-ds-1",
   "voyage_model_name": "voyage-3",
-  "training_limit": 100,
+  "training_limit": 5000,
   "representation_model": {
-    "model_path": "/home/knf/code/models/qwq32b_q2_k.gguf",
+    "model_path": "/home/knf/code/models/Qwen2.5-7b-Instruct-1M-q2_k.gguf",
     "n_gpu_layers": 50,
     "n_ctx": 16000,
     "stop": "Q:"
@@ -16,7 +16,7 @@
     "n_components": 5,
     "min_dist": 0.1,
     "init": "spectral",
-    "spread": 1.0
+    "spread": 2.0
   },
   "hdbscan_params": {
     "min_cluster_size": 5,
