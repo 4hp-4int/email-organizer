@@ -28,7 +28,13 @@ async def collect_and_store_email(
     """
     email_agent = EmailOrganizerAgent(name="Aloyisius")
 
-    async for message in email_agent.get_inbox(user_id):
+    async for idx, message in email_agent.get_inbox(user_id):
+        if not message:
+            continue
+
+        if idx % 100 == 0:
+            logger.info(f"{idx} Records Inserted...")
+
         result = email_collection.insert_one(asdict(message))
         if not result:
             logger.exception("Failed to write email to the database")

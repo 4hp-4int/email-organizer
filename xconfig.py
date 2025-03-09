@@ -15,7 +15,7 @@ class Config:
     AZURE_GRAPH_SCOPES = os.environ["AZURE_GRAPH_SCOPES"].split(" ")
 
     EMAIL_DATA_DATABASE = "email_organizer"
-    EMAIL_DATA_COLLECTION = "emails_v2"
+    EMAIL_DATA_COLLECTION = "emails_v3"
     EMAIL_RUN_LOG_COLLECTION = "email_run_log"
     EMAIL_SUPERVISED_TRAINING_COLLECTION = "email_supervised_training"
 

@@ -4,16 +4,12 @@
   "representation_model": {
     "model_path": "/home/knf/Qwen2.5-14b-Instruct-1M-q8_0.gguf",
     "n_gpu_layers": -1,
-    "n_ctx": 8192,
+    "n_ctx": 32000,
     "stop": "Q:"
   },
-  "nr_topics": 10,
+  "nr_topics": 30,
   "min_topic_size": 15,
-  "zeroshot_topic_list": [
-    "Finance",
-    "Technology",
-    "Health"
-  ],
+  "zeroshot_topic_list": [],
   "umap_params": {
     "n_neighbors": 15,
     "n_components": 5,

@@ -24,10 +24,12 @@ from msgraph.generated.users.item.messages.messages_request_builder import (
     MessagesRequestBuilder,
 )
 from kiota_abstractions.base_request_configuration import RequestConfiguration
-from sentence_transformers import SentenceTransformer
-import spacy
+from kiota_authentication_azure.azure_identity_authentication_provider import (
+    AzureIdentityAuthenticationProvider,
+)
 
 from src.message import Message
+from src.request_adapter import LoggingRequestAdapter
 from src.util import simplify_html
 from xconfig import Config
 
@@ -37,16 +39,9 @@ config = Config()
 
 @dataclass
 class EmailMessage:
-    subject: str
-    body: str
-    sender: str
-    importance: str
     message_id: str
-    conversation_id: str
     received_date: date
-    embeddings: list = field(default_factory=list)
     embedding_text: str = field(default_factory=str)
-    label: str = field(default_factory=str)
 
 
 class EmailOrganizerAgent:
@@ -57,7 +52,6 @@ class EmailOrganizerAgent:
     def __init__(self, name: str):
         super().__init__()
         self.cipher_suite = Fernet(config.ENCRYPTION_KEY)
-        self.model = SentenceTransformer(config.MODEL, device="cuda")
 
         tenant_id = config.AZURE_TENANT_ID
         client_id = config.AZURE_CLIENT_ID
@@ -70,7 +64,13 @@ class EmailOrganizerAgent:
         self.user_client = GraphServiceClient(
             credentials=client_secret_credential,
             scopes=graph_scopes,
+            request_adapter=LoggingRequestAdapter(
+                auth_provider=AzureIdentityAuthenticationProvider(
+                    client_secret_credential, scopes=graph_scopes
+                )
+            ),
         )
+
         self.name = name
 
     def _encrypt_message(self, message):
@@ -136,21 +136,17 @@ class EmailOrganizerAgent:
             logger.exception(f"Failed to preprocess email: {e}")
             raise e
 
-        # Generate embeddings for the email content
-        email_embeddings = self.model.encode(email_content, show_progress_bar=False)
+        try:
+            # Create the EmailMessage object
+            email_msg = EmailMessage(
+                received_date=message.received_date_time,
+                message_id=message.id,
+                embedding_text=self._encrypt_message(email_content),
+            )
+        except AttributeError as e:
+            logger.exception(f"Encountered error {e} - Skipping email for now")
+            return
 
-        # Create the EmailMessage object
-        email_msg = EmailMessage(
-            subject=self._encrypt_message(message.subject),
-            body=self._encrypt_message(message.body.content),
-            sender=self._encrypt_message(message.sender.email_address.address),
-            importance=message.importance,
-            conversation_id=message.conversation_id,
-            received_date=message.received_date_time,
-            message_id=message.internet_message_id,
-            embeddings=email_embeddings.tolist(),
-            embedding_text=self._encrypt_message(email_content),
-        )
         return email_msg
 
     async def get_inbox(self, user_id: str):
@@ -161,7 +157,7 @@ class EmailOrganizerAgent:
 
         query_params = MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters(
             select="from,isRead,receivedDateTime,subject,body",
-            top=100,
+            top=50,
             orderby="receivedDateTime DESC",
         )
         request_configuration = RequestConfiguration(query_parameters=query_params)
@@ -171,12 +167,16 @@ class EmailOrganizerAgent:
             request_configuration=request_configuration
         )
 
+        logger.info("Collecting inbox emails...")
+        num_emails_collected = 0
         while True:
 
             for message in messages.value:
 
+                logger.debug(f"Processing Emil: {message.id}")
                 email = self.create_email_message(message)
-                yield email
+                num_emails_collected += 1
+                yield num_emails_collected, email
             # Check if there are more pages
             if messages.odata_next_link:
                 messages = (

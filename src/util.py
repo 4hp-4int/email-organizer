@@ -43,9 +43,4 @@ def preprocess_email(email: Dict) -> str:
     subject = email["subject"]
     body = email["body"]
     combined_text = "Subject: %s\n\nBody: %s".format(subject, body)
-    doc = nlp(combined_text)
-    filtered_words = [
-        token.text for token in doc if not token.is_stop and not token.is_punct
-    ]
-    # Join the filtered words back into a string
-    cleaned_text = " ".join(filtered_words)
+    return combined_text

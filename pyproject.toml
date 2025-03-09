@@ -19,4 +19,11 @@ dependencies = [
     "typer>=0.15.2",
     "voyageai>=0.3.2",
     "llama-cpp-python>=0.3.7",
+    "python-dotenv>=1.0.1",
+]
+
+[dependency-groups]
+dev = [
+    "black>=25.1.0",
+    "ipython>=8.18.1",
 ]
