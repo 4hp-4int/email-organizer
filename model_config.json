@@ -3,7 +3,7 @@
   "voyage_model_name": "voyage-3",
   "training_limit": 100,
   "representation_model": {
-    "model_path": "/home/knf/code/models/Qwen2.5-7b-Instruct-1M-q2_k.gguf",
+    "model_path": "/home/knf/code/models/qwq32b_q2_k.gguf",
     "n_gpu_layers": 50,
     "n_ctx": 16000,
     "stop": "Q:"

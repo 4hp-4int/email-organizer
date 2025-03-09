@@ -61,15 +61,6 @@ class Config:
     <|im_start|>assistant
     """
 
-    PROMPT_Z = """
-    I have a topic that contains the following documents: 
-    [DOCUMENTS]
-    The topic is described by the following keywords: [KEYWORDS]
-
-    Based on the information above, extract a short topic label in the following format:
-    topic: <topic label>
-    """
-
     @property
     def connection_string(self) -> str:
         user = os.environ.get("DB_USER")
