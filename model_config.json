@@ -1,19 +1,21 @@
 {
   "model_name": "ao-vq-ds-1",
-  "voyage_model_name": "voyage-3-large",
+  "voyage_model_name": "voyage-3",
+  "training_limit": 100,
   "representation_model": {
-    "model_path": "/home/knf/Qwen2.5-14b-Instruct-1M-q8_0.gguf",
-    "n_gpu_layers": -1,
-    "n_ctx": 32000,
+    "model_path": "/home/knf/code/models/Qwen2.5-7b-Instruct-1M-q2_k.gguf",
+    "n_gpu_layers": 50,
+    "n_ctx": 16000,
     "stop": "Q:"
   },
   "nr_topics": 30,
   "min_topic_size": 15,
   "zeroshot_topic_list": [],
   "umap_params": {
-    "n_neighbors": 15,
+    "n_neighbors": 50,
     "n_components": 5,
-    "min_dist": 0.0,
+    "min_dist": 0.1,
+    "init": "spectral",
     "spread": 1.0
   },
   "hdbscan_params": {

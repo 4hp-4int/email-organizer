@@ -59,7 +59,6 @@ class TopicModelFactory:
             umap_model=umap_model,
             hdbscan_model=hdbscan_model,
             representation_model=representation_model,
-            zeroshot_topic_list=self.cfg.get("zeroshot_topic_list", []),
         )
 
         return model
@@ -84,7 +83,7 @@ class TopicModelFactory:
                 n_ctx=self.cfg["representation_model"]["n_ctx"],
                 stop=self.cfg["representation_model"]["stop"],
             )
-            representation_model = LlamaCPP(llm, prompt=self.app_config.PROMPT)
+            representation_model = LlamaCPP(llm)
             loaded_model.representation_model = representation_model
 
         return loaded_model

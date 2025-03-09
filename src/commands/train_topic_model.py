@@ -64,7 +64,7 @@ def train_topic_model(
             doc_string = email_agent._decrypt_message(email.get("embedding_text"))
             raw_doc_strings.append(doc_string)
 
-    dataset = Dataset.from_dict({"text": raw_doc_strings, "embedding": doc_embeddings})
+    dataset = Dataset.from_dict({"text": raw_doc_strings})
 
     # Fit the model
     logger.info("Fitting BERTopic model with loaded config")
@@ -82,7 +82,7 @@ def train_topic_model(
 
     print(topic_model.get_topic_info())
 
-    # Save the model
+    # Save the model with the name of the model
     model_path = factory.cfg["model_name"]
     topic_model.save(model_path, serialization="safetensors", save_ctfidf=True)
 
